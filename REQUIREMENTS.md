@@ -11,13 +11,13 @@
 
 ## The short version
 
-| #   | What I need                                      | Where | If you skip it                                                |
-| --- | ------------------------------------------------ | ----- | ------------------------------------------------------------- |
-| 1   | **License server API** (URL + request/reply)     | §1    | Nobody but you can activate the app                           |
-| 2   | **Windows code-signing certificate**             | §4    | SmartScreen warns on install; most users stop there           |
-| 3   | **Branding** — icon, publisher name, support URL | §2    | A placeholder icon ships and the installer shows no publisher |
-| 4   | **Update feed URL**                              | §3    | No way to ship a fix after release                            |
-| 5   | **AI defaults** — model, caps                    | §5    | Sensible defaults stay; spend is uncapped                     |
+| #   | What I need                                          | Where | If you skip it                                                |
+| --- | ---------------------------------------------------- | ----- | ------------------------------------------------------------- |
+| 1   | **License server API** (URL + request/reply)         | §1    | Nobody but you can activate the app                           |
+| 2   | **Code signing — Windows cert + Apple Developer ID** | §4    | SmartScreen warns on Windows; macOS refuses to open the app   |
+| 3   | **Branding** — icon, publisher name, support URL     | §2    | A placeholder icon ships and the installer shows no publisher |
+| 4   | **Update feed URL**                                  | §3    | No way to ship a fix after release                            |
+| 5   | **AI defaults** — model, caps                        | §5    | Sensible defaults stay; spend is uncapped                     |
 
 **You can run and test everything today without any of these.** `npm run dev:mock` starts the
 app against a mock license server and a fake WhatsApp transport — activate with
@@ -200,10 +200,10 @@ You chose auto-update via **your own server / S3**.
 
 ## Section 4 — Code Signing ⬜
 
-Without this, Windows shows a SmartScreen warning when someone runs the installer.
+Without this, Windows shows a SmartScreen warning when someone runs the installer, and macOS
+refuses to open the app at all.
 
-**Windows is the only distribution target** (decided 2026-07-28), so there is nothing to answer
-about Apple Developer accounts, notarization or a Mac build machine.
+**Windows and macOS are both distribution targets** (decided 2026-10-02, tracker D85).
 
 | Item                                                      | Value                                                                           |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -212,6 +212,11 @@ about Apple Developer accounts, notarization or a Mac build machine.
 | Where is the cert file, and where is its password stored? | `___` (value → `REQUIREMENTS.local.md`)                                         |
 | If Azure Trusted Signing: endpoint, account, cert profile | `___`                                                                           |
 | Timestamp server URL preference                           | `___` (default `http://timestamp.digicert.com`)                                 |
+| **macOS:** Apple Developer Program membership?            | ⬜ Yes ⬜ No — need to enroll ($99/year)                                        |
+| **macOS:** Team ID                                        | `___`                                                                           |
+| **macOS:** "Developer ID Application" certificate (.p12)  | `___` (location and password → `REQUIREMENTS.local.md`)                         |
+| **macOS:** notarization Apple ID + app-specific password  | `___` (→ `REQUIREMENTS.local.md`), or an App Store Connect API key              |
+| **macOS:** a Mac to build on (or a macOS CI runner)?      | ⬜ Apple Silicon Mac ⬜ Intel Mac ⬜ CI runner                                  |
 
 ---
 
@@ -275,7 +280,7 @@ Recorded in [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) §7 with the full reasoning
 
 | Decision                                                                     | Tracker  |
 | ---------------------------------------------------------------------------- | -------- |
-| Windows-only distribution; Apple packaging and notarization removed          | D66      |
+| Windows **and macOS** distribution (Mac reinstated 2026-10-02)               | D66, D85 |
 | No default country code — every import asks, per file                        | D67      |
 | Link previews always on, fetched once per URL rather than once per message   | D68, D69 |
 | Real WhatsApp buttons and single-select lists, with a numbered-text fallback | D70–D72  |

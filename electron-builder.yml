@@ -44,6 +44,28 @@ nsis:
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
 
+# macOS (tracker D85). zip is required alongside dmg: electron-updater installs
+# Mac updates from the zip and reads latest-mac.yml. Build on a Mac — the native
+# modules (better-sqlite3, sharp's @img/sharp-darwin-*) must be the darwin
+# binaries for each arch; see RELEASE.md.
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  icon: assets/branding/icon.png
+  category: public.app-category.business
+  # Required for notarization. Without an Apple Developer identity
+  # (REQUIREMENTS §4) the build is unsigned and Gatekeeper blocks it.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: assets/branding/entitlements.mac.plist
+  entitlementsInherit: assets/branding/entitlements.mac.plist
+  # Notarization is automatic when APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
+  # APPLE_TEAM_ID (or an App Store Connect API key) are set in the environment,
+  # and skipped otherwise.
+
 linux:
   target: []
 

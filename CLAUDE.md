@@ -14,7 +14,7 @@ Rules for every coding session in this repository. Read this **before** touching
 
 ## 1. Project in one paragraph
 
-RapBooster Advance is a licensed Windows desktop app for WhatsApp marketing: Electron
+RapBooster Advance is a licensed Windows and macOS desktop app for WhatsApp marketing: Electron
 shell, Next.js renderer, Baileys for WhatsApp, local SQLite per OS user. It connects up to 20
 WhatsApp accounts concurrently and runs bulk campaigns, group operations, a unified inbox, and
 an OpenAI auto-responder. Nine screens, all defined in `SPRINTS.md` §2. Four sprints, each
@@ -316,7 +316,7 @@ deviations, known issues — and commit everything in one commit.
   the most security-sensitive dependency in the app.
 - Prefer the dependencies already listed in `SPRINTS.md` §14. Adding one outside that list
   needs a line in the tracker's decision log explaining why.
-- Native modules (`better-sqlite3`, `sharp`) must rebuild for the Windows target and be listed in
+- Native modules (`better-sqlite3`, `sharp`) must rebuild for each target OS and arch and be listed in
   `asarUnpack` — a `.node` binary cannot be `dlopen`'d from inside an asar. Verify in the
   packaged smoke test, not just in dev.
 - **A peer dependency of a dependency does not get packaged.** npm hoists peers to the root, so
@@ -354,13 +354,24 @@ Things that will bite, listed so nobody rediscovers them the expensive way.
 
 ---
 
-## 10. Quick reference
+## 10. Memory
+
+Claude's memory lives in this repository only. Auto memory is off (`.claude/settings.json`),
+and user-level `~/.claude/CLAUDE.md` files are excluded so that a personal file on one
+machine cannot change how the project is built on another. Durable notes go in
+`.claude/memory/MEMORY.md`, imported here and committed with the work:
+
+@.claude/memory/MEMORY.md
+
+---
+
+## 11. Quick reference
 
 ```bash
 npm run dev           # Electron + Next dev server with HMR
 npm run dev:mock      # …with the mock license server and mock WhatsApp transport
 npm run build         # Build all processes
-npm run dist          # Package the Windows NSIS installer
+npm run dist          # Package the installer for this OS (NSIS / dmg+zip)
 npm run typecheck     # tsc --noEmit across all tsconfigs
 npm run lint          # ESLint
 npm run test:e2e      # Playwright against a dev build
@@ -370,5 +381,6 @@ npm run db:studio     # Inspect the local database
 graphify . --update   # Refresh the knowledge graph
 ```
 
-Runtime data lives under `app.getPath('userData')` — `%APPDATA%\RapBooster` on Windows.
+Runtime data lives under `app.getPath('userData')` — `%APPDATA%\RapBooster` on Windows,
+`~/Library/Application Support/RapBooster Advance` on macOS.
 Layout is in `SPRINTS.md` §3.4.

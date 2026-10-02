@@ -11,11 +11,10 @@ user in the OS application-data directory.
 > See [REQUIREMENTS.md §2–§4](./REQUIREMENTS.md) and [RELEASE.md](./RELEASE.md).
 >
 > **An unsigned Windows installer triggers a SmartScreen warning most people will not click
-> through.** A code-signing certificate is the single item standing between this and a
-> shippable product.
+> through, and an unsigned Mac app will not open at all.** Code signing (a Windows
+> certificate and an Apple Developer ID) is what stands between this and a shippable product.
 >
-> **Windows is the only distribution target** — macOS packaging and Apple signing were removed
-> on 2026-07-28 at the customer's instruction.
+> **Windows and macOS** are both distribution targets (Apple Silicon and Intel).
 
 ## What it does
 
@@ -35,8 +34,9 @@ Nine screens, all derived from the prototypes in `design/`:
 ## Requirements
 
 - **Node.js 20 or newer**
-- **Windows.** It is the only distribution target; installers are produced on Windows.
-- No Python or C++ toolchain needed. Electron is pinned to 42.7.1 so the `better-sqlite3`
+- **Windows or macOS.** Each platform's installer is built on that platform — the native
+  modules are per-OS binaries. See [RELEASE.md](./RELEASE.md).
+- No Python or C++ toolchain needed. Electron is pinned to 44.5.1 so the `better-sqlite3`
   prebuilt binaries match its ABI; upgrading Electron without checking that forces a source
   build on every machine.
 
@@ -110,17 +110,17 @@ database and an unactivated app.
 
 ## Commands
 
-| Command              | What it does                                                           |
-| -------------------- | ---------------------------------------------------------------------- |
-| `npm run dev`        | Development, with hot reload                                           |
-| `npm run dev:mock`   | Development with the mock license server and mock WhatsApp transport   |
-| `npm run verify`     | Format, lint, typecheck, and dependency checks — run before committing |
-| `npm run build`      | Production bundles for main, preload, wa-service and the renderer      |
-| `npm run pack`       | Unpacked build in `dist/`, no installer                                |
-| `npm run dist`       | Windows NSIS installer in `dist/`                                      |
-| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (81 specs)      |
-| `npm run test:smoke` | Packages the app and runs its self-test — catches asar/native issues   |
-| `npm run db:studio`  | Browse the local database                                              |
+| Command              | What it does                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `npm run dev`        | Development, with hot reload                                                        |
+| `npm run dev:mock`   | Development with the mock license server and mock WhatsApp transport                |
+| `npm run verify`     | Format, lint, typecheck, and dependency checks — run before committing              |
+| `npm run build`      | Production bundles for main, preload, wa-service and the renderer                   |
+| `npm run pack`       | Unpacked build in `dist/`, no installer                                             |
+| `npm run dist`       | Installer for the current platform in `dist/` (NSIS on Windows, dmg + zip on macOS) |
+| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (81 specs)                   |
+| `npm run test:smoke` | Packages the app and runs its self-test — catches asar/native issues                |
+| `npm run db:studio`  | Browse the local database                                                           |
 
 Before committing, the gate is `npm run verify && npm run test:e2e && npm run test:smoke`.
 
@@ -163,7 +163,7 @@ Reproduce with `npm run pack && node scripts/perf.mjs`, and
 | Document                                     | What it is                                                            |
 | -------------------------------------------- | --------------------------------------------------------------------- |
 | [REQUIREMENTS.md](./REQUIREMENTS.md)         | **Open questions only.** §1–§5 are what still block shipping          |
-| [RELEASE.md](./RELEASE.md)                   | How to build, sign and publish a Windows update                       |
+| [RELEASE.md](./RELEASE.md)                   | How to build, sign and publish a Windows or macOS update              |
 | [SPRINTS.md](./SPRINTS.md)                   | Full specification: screens, schema, IPC contract, algorithms         |
 | [SPRINT-TRACKER.md](./SPRINT-TRACKER.md)     | Live status, decision log, known issues, test history                 |
 | [IMPROVEMENT-PLAN.md](./IMPROVEMENT-PLAN.md) | Post-Sprint-4 roadmap and the questions it still depends on           |

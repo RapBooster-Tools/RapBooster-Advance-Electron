@@ -15,6 +15,22 @@ function findBinary() {
   const candidates = [
     join(DIST, 'win-unpacked', 'RapBooster Advance.exe'),
     join(DIST, 'linux-unpacked', 'rapbooster-advance'),
+    join(
+      DIST,
+      'mac-arm64',
+      'RapBooster Advance.app',
+      'Contents',
+      'MacOS',
+      'RapBooster Advance',
+    ),
+    join(
+      DIST,
+      'mac',
+      'RapBooster Advance.app',
+      'Contents',
+      'MacOS',
+      'RapBooster Advance',
+    ),
   ]
   const found = candidates.find((c) => existsSync(c))
   if (!found) {

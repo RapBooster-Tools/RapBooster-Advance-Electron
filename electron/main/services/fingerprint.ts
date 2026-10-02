@@ -34,13 +34,20 @@ function primaryMac(): string {
   return macs.sort()[0] ?? 'no-mac'
 }
 
+function osUserId(): string {
+  const { uid, username } = userInfo()
+  return uid >= 0 ? String(uid) : username
+}
+
 function computeFingerprint(): string {
   const parts = [
     platform(),
     hostname(),
     primaryMac(),
     // Scopes the identity to the OS user, matching the per-user database.
-    String(userInfo().uid ?? userInfo().username),
+    // WHY not `uid ?? username`: Windows reports uid -1 rather than null, so the
+    // fallback never ran and every Windows user on a machine shared one identity.
+    osUserId(),
   ]
   return createHash('sha256').update(parts.join('|')).digest('hex')
 }

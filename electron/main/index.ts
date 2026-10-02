@@ -398,10 +398,14 @@ async function bootUi(): Promise<void> {
     }, REVALIDATE_INTERVAL_MS)
   }
 
-  // WHY unconditional: Windows is the only distribution target (tracker D66), and
-  // there closing the last window means quitting.
+  // Platform convention (tracker D85). On Windows closing the last window quits.
+  // On macOS the app stays in the Dock — campaigns keep sending — and clicking
+  // the Dock icon brings a window back.
   app.on('window-all-closed', () => {
-    app.quit()
+    if (process.platform !== 'darwin') app.quit()
+  })
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 
   // Graceful shutdown (CLAUDE.md §5.5): release the client and fold the WAL back

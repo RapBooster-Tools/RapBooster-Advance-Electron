@@ -22,6 +22,22 @@ function findBinary() {
   const candidates = [
     join(DIST, 'win-unpacked', 'RapBooster Advance.exe'),
     join(DIST, 'linux-unpacked', 'rapbooster-advance'),
+    join(
+      DIST,
+      'mac-arm64',
+      'RapBooster Advance.app',
+      'Contents',
+      'MacOS',
+      'RapBooster Advance',
+    ),
+    join(
+      DIST,
+      'mac',
+      'RapBooster Advance.app',
+      'Contents',
+      'MacOS',
+      'RapBooster Advance',
+    ),
   ]
   const found = candidates.find((c) => existsSync(c))
   if (!found) {
@@ -42,7 +58,11 @@ const timings = []
 for (let i = 0; i < RUNS; i++) {
   const started = performance.now()
   try {
-    execFileSync(binary, ['--self-test'], { encoding: 'utf8', timeout: 120_000, windowsHide: true })
+    execFileSync(binary, ['--self-test'], {
+      encoding: 'utf8',
+      timeout: 120_000,
+      windowsHide: true,
+    })
   } catch (err) {
     console.error(`startup run ${i + 1} failed: ${err.message}`)
     process.exit(1)
@@ -58,7 +78,9 @@ const worst = Math.max(...warm)
 
 console.log('STARTUP (process start → app ready → database ready)')
 console.log(`  cold (first launch): ${cold.toFixed(0)} ms`)
-console.log(`  warm mean over ${warm.length}: ${mean.toFixed(0)} ms  [${best.toFixed(0)}–${worst.toFixed(0)} ms]`)
+console.log(
+  `  warm mean over ${warm.length}: ${mean.toFixed(0)} ms  [${best.toFixed(0)}–${worst.toFixed(0)} ms]`,
+)
 console.log(`  all runs: ${timings.map((t) => t.toFixed(0)).join(', ')} ms\n`)
 
 // --- Memory ----------------------------------------------------------------
@@ -66,6 +88,7 @@ console.log(`  all runs: ${timings.map((t) => t.toFixed(0)).join(', ')} ms\n`)
 // GPU process, a renderer and our wa-service utility process, and only the sum
 // tells you what the machine actually gives up.
 function treeRssMb() {
+  if (process.platform === 'darwin') return macTreeRssMb()
   if (process.platform !== 'win32') return null
   try {
     const out = execFileSync(
@@ -82,6 +105,25 @@ function treeRssMb() {
     const bytes = Number(out.trim())
     return Number.isFinite(bytes) && bytes > 0 ? bytes / 1024 / 1024 : null
   } catch {
+    return null
+  }
+}
+
+// macOS: `ps` reports RSS in KiB. Helper processes are named "RapBooster Advance
+// Helper (…)", so a substring match on the product name covers the whole tree.
+function macTreeRssMb() {
+  try {
+    const out = execFileSync('ps', ['-axo', 'rss=,comm='], {
+      encoding: 'utf8',
+      timeout: 30_000,
+    })
+    const kib = out
+      .split('\n')
+      .filter((line) => line.includes('RapBooster Advance'))
+      .reduce((sum, line) => sum + (Number.parseInt(line.trim(), 10) || 0), 0)
+    return kib > 0 ? kib / 1024 : null
+  } catch (err) {
+    console.debug('perf: ps failed', err)
     return null
   }
 }
