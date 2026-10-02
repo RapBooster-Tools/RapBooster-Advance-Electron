@@ -2,6 +2,8 @@
 
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useRef, useState } from 'react'
+import type { WaNumberStatus } from '@shared/types'
+import { TagChip, WaStatusBadge } from '@renderer/components/contacts/badges'
 import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/cn'
 
@@ -11,6 +13,14 @@ interface Contact {
   phone: string
   data: Record<string, string>
   isValid: boolean
+  waStatus: WaNumberStatus
+  tagIds: string[]
+}
+
+export interface TagInfo {
+  id: string
+  name: string
+  color: string
 }
 
 const PAGE_SIZE = 200
@@ -27,12 +37,23 @@ export function ContactTable({
   listId,
   fields,
   search,
+  tagId,
+  waStatus,
+  tags,
+  selected,
+  onSelect,
   onDelete,
   reloadKey,
 }: {
   listId: string
   fields: string[]
   search: string
+  tagId?: string
+  waStatus?: WaNumberStatus
+  tags: Map<string, TagInfo>
+  selected: ReadonlySet<string>
+  /** Toggle these ids; `on` says whether they become selected. */
+  onSelect: (ids: string[], on: boolean) => void
   onDelete: (id: string) => void
   reloadKey: number
 }) {
@@ -42,15 +63,17 @@ export function ContactTable({
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // A changed list, search or reload key invalidates everything fetched so far.
-  const queryKey = `${listId}|${search}|${reloadKey}`
+  // A changed list, filter, search or reload key invalidates everything
+  // fetched so far.
+  const queryKey = `${listId}|${search}|${tagId ?? ''}|${waStatus ?? ''}|${reloadKey}`
+  const filters = { search: search || undefined, tagId, waStatus }
   const loadedKey = useRef('')
 
   useEffect(() => {
     let cancelled = false
 
     void window.api
-      .invoke('contacts:list', { listId, search: search || undefined, limit: PAGE_SIZE })
+      .invoke('contacts:list', { listId, ...filters, limit: PAGE_SIZE })
       .then((result) => {
         if (cancelled) return
         loadedKey.current = queryKey
@@ -81,6 +104,7 @@ export function ContactTable({
   })
 
   const items = virtualizer.getVirtualItems()
+  const allLoadedSelected = rows.length > 0 && rows.every((r) => selected.has(r.id))
   const last = items[items.length - 1]
 
   // Fetch the next page as the user approaches the end of what is loaded.
@@ -92,7 +116,7 @@ export function ContactTable({
     void window.api
       .invoke('contacts:list', {
         listId,
-        search: search || undefined,
+        ...filters,
         cursor,
         limit: PAGE_SIZE,
       })
@@ -109,7 +133,9 @@ export function ContactTable({
   if (total === 0) {
     return (
       <p className="p-6 text-sm text-ink-muted" data-testid="contacts-empty">
-        {search ? 'No contacts match that search.' : 'This list has no contacts yet.'}
+        {search || tagId || waStatus
+          ? 'No contacts match these filters.'
+          : 'This list has no contacts yet.'}
       </p>
     )
   }
@@ -123,12 +149,27 @@ export function ContactTable({
         <span>{rows.length.toLocaleString()} loaded</span>
       </div>
 
-      <div className="flex gap-2 border-b border-line bg-app-bg px-6 py-1.5 text-xs font-medium text-ink-muted">
+      <div className="flex items-center gap-2 border-b border-line bg-app-bg px-6 py-1.5 text-xs font-medium text-ink-muted">
+        <input
+          type="checkbox"
+          aria-label="Select all loaded contacts"
+          data-testid="contact-check-all"
+          checked={allLoadedSelected}
+          onChange={(e) =>
+            onSelect(
+              rows.map((r) => r.id),
+              e.target.checked,
+            )
+          }
+          className="shrink-0"
+        />
         {fields.map((field) => (
           <span key={field} className="min-w-0 flex-1 truncate">
             {field}
           </span>
         ))}
+        <span className="w-40 shrink-0">Tags</span>
+        <span className="w-28 shrink-0">WhatsApp</span>
         <span className="w-16 shrink-0 text-right">Actions</span>
       </div>
 
@@ -145,17 +186,42 @@ export function ContactTable({
               <div
                 key={contact.id}
                 data-testid="contact-row"
+                data-phone={contact.phone}
                 className={cn(
                   'absolute left-0 flex w-full items-center gap-2 border-b border-line px-6 text-sm',
                   !contact.isValid && 'bg-status-warn-bg',
                 )}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${item.start}px)` }}
               >
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${contact.name || contact.phone}`}
+                  data-testid="contact-check"
+                  checked={selected.has(contact.id)}
+                  onChange={(e) => onSelect([contact.id], e.target.checked)}
+                  className="shrink-0"
+                />
                 {fields.map((field) => (
                   <span key={field} className="min-w-0 flex-1 truncate text-ink">
                     {contact.data[field] ?? ''}
                   </span>
                 ))}
+                <span className="flex w-40 shrink-0 gap-1 overflow-hidden">
+                  {contact.tagIds.map((id) => {
+                    const tag = tags.get(id)
+                    return tag ? (
+                      <TagChip
+                        key={id}
+                        name={tag.name}
+                        color={tag.color}
+                        testId="contact-tag-chip"
+                      />
+                    ) : null
+                  })}
+                </span>
+                <span className="w-28 shrink-0">
+                  <WaStatusBadge status={contact.waStatus} />
+                </span>
                 <span className="w-16 shrink-0 text-right">
                   <Button size="sm" variant="danger" onClick={() => onDelete(contact.id)}>
                     Delete
