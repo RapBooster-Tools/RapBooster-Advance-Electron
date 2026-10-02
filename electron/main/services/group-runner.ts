@@ -14,6 +14,7 @@ import { groupName } from '../../../shared/group-names'
 import { buildTemplateMessage } from './template-message'
 import type { SuffixRule } from '../../../shared/types'
 import { waBridge } from '../wa-bridge'
+import { applyCreateSettings, syncCommunities, type CreateSettings } from './group-meta'
 
 export interface GroupJobProgress {
   jobId: string
@@ -28,6 +29,12 @@ type ProgressListener = (progress: GroupJobProgress) => void
 export class GroupRunner {
   private progress: ProgressListener | undefined
   private readonly active = new Set<string>()
+  /**
+   * NOTE: held in memory because GroupCreateJob has no column for them. A
+   * create job is never resumed after a restart (it runs once, start to end),
+   * so nothing would read them back from the row anyway.
+   */
+  private readonly createSettings = new Map<string, CreateSettings>()
 
   onProgress(listener: ProgressListener): void {
     this.progress = listener
@@ -69,6 +76,13 @@ export class GroupRunner {
           })
           synced += 1
         }
+
+        // group:fetch cannot say which rows are communities or which group
+        // sits inside one; community:fetch can. Separate so a device whose
+        // account has no community support still syncs its groups.
+        await syncCommunities(device.id).catch((err: unknown) => {
+          console.warn(`community sync failed for device ${device.id}`, err)
+        })
       } catch (err) {
         // One unreachable device must not abandon the others.
         console.error(`group sync failed for device ${device.id}`, err)
@@ -190,6 +204,9 @@ export class GroupRunner {
     delaySeconds: number
     listIds: string[]
     contactsPerGroup: number
+    description?: string
+    announce: boolean
+    joinApproval: boolean
   }): Promise<string> {
     const job = await getPrisma().groupCreateJob.create({
       data: {
@@ -202,6 +219,12 @@ export class GroupRunner {
         contactsPerGroup: input.contactsPerGroup,
         status: 'running',
       },
+    })
+
+    this.createSettings.set(job.id, {
+      ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+      announce: input.announce,
+      joinApproval: input.joinApproval,
     })
 
     void this.runCreate(job.id).catch((err: unknown) => {
@@ -269,10 +292,16 @@ export class GroupRunner {
           // WhatsApp privacy settings can silently prevent adding a contact,
           // so a group with fewer members than requested is normal — recorded
           // rather than treated as failure.
+          const notes: string[] = []
           if (created.memberCount < participants.length) {
-            results[results.length - 1]!.error =
-              `${participants.length - created.memberCount} participant(s) could not be added (privacy settings)`
+            notes.push(
+              `${participants.length - created.memberCount} participant(s) could not be added (privacy settings)`,
+            )
           }
+          const settings = this.createSettings.get(jobId)
+          if (settings)
+            notes.push(...(await applyCreateSettings(job.deviceId, created.id, settings)))
+          if (notes.length > 0) results[results.length - 1]!.error = notes.join('; ')
         } catch (err) {
           await prisma.groupCreateJob.update({
             where: { id: jobId },
@@ -315,6 +344,7 @@ export class GroupRunner {
       })
     } finally {
       this.active.delete(jobId)
+      this.createSettings.delete(jobId)
     }
   }
 }
