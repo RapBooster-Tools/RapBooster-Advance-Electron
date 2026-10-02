@@ -32,15 +32,21 @@ import { TransportEmitter } from './emitter'
 import { resolveLinkPreview } from '../link-preview'
 import { buttonsAsNumberedText } from '../../../shared/template-buttons'
 import type { WaButton } from '../../../shared/wa-protocol'
+import type { WaRequests, WaResponses } from '../../../shared/wa-protocol'
 import type {
+  GroupMetadata,
   IncomingMessage,
   OutgoingButtons,
   OutgoingList,
   OutgoingMessage,
+  Product,
   RemoteGroup,
   SendResult,
+  StatusContent,
   Transport,
 } from './types'
+
+type Payload<K extends keyof WaRequests> = Omit<WaRequests[K], 'deviceId'>
 
 interface Session {
   socket: WASocket
@@ -65,6 +71,12 @@ function mimeFor(path: string): string {
     webp: 'image/webp',
     gif: 'image/gif',
     mp4: 'video/mp4',
+    ogg: 'audio/ogg; codecs=opus',
+    opus: 'audio/ogg; codecs=opus',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    aac: 'audio/aac',
+    wav: 'audio/wav',
     pdf: 'application/pdf',
     doc: 'application/msword',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -72,6 +84,48 @@ function mimeFor(path: string): string {
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   }
   return table[ext] ?? 'application/octet-stream'
+}
+
+/** A vCard 3.0 for one shared contact; `waid` makes WhatsApp show "Message". */
+function vcard(name: string, phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  return [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${name.replace(/[\r\n]/g, ' ')}`,
+    `TEL;type=CELL;type=VOICE;waid=${digits}:+${digits}`,
+    'END:VCARD',
+  ].join('\n')
+}
+
+/**
+ * The sender as E.164, whenever WhatsApp tells us the phone number.
+ *
+ * WHY: Baileys 7 can address a chat by LID — an opaque per-user id, not a
+ * phone number — and then carries the phone JID in `remoteJidAlt`. Opt-out
+ * handling, reply attribution and sequence stop-on-reply all match on phone,
+ * so a LID here would silently miss every one of them. In a group the sender
+ * is the participant, not the group.
+ */
+function senderPhone(raw: WAMessage, chatId: string): string {
+  const isPn = (jid: string | null | undefined): jid is string =>
+    typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')
+  const candidates = chatId.endsWith('@g.us')
+    ? [raw.key.participantAlt, raw.key.participant]
+    : [chatId, raw.key.remoteJidAlt]
+  const pn = candidates.find(isPn)
+  if (pn) return `+${(pn.split('@')[0] ?? '').split(':')[0] ?? ''}`
+  const fallback = candidates.find((c): c is string => typeof c === 'string') ?? chatId
+  return fallback.split('@')[0] ?? fallback
+}
+
+/** Our own JID's user part, or null before login completes. */
+function ownJid(socket: WASocket): string | null {
+  return socket.user?.id ? jidNormalizedUser(socket.user.id) : null
+}
+
+function participantPhone(jid: string): string {
+  return `+${(jid.split('@')[0] ?? '').split(':')[0] ?? ''}`
 }
 
 /**
@@ -298,6 +352,37 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       }
     })
 
+    socket.ev.on('call', (calls) => {
+      for (const call of calls) {
+        // Only the offer matters: that is the moment a reject is still possible.
+        if (call.status !== 'offer') continue
+        this.emit('call', deviceId, {
+          callId: call.id,
+          from: call.callerPn ?? call.from,
+          isVideo: call.isVideo ?? false,
+        })
+      }
+    })
+
+    socket.ev.on('labels.edit', (label) => {
+      this.emit('label', deviceId, {
+        labelId: label.id,
+        name: label.name,
+        color: label.color,
+        deleted: label.deleted,
+      })
+    })
+
+    socket.ev.on('labels.association', ({ association, type }) => {
+      // Message-level labels have no equivalent in our model; chats map to tags.
+      if (!('chatId' in association) || 'messageId' in association) return
+      this.emit('labelAssociation', deviceId, {
+        labelId: association.labelId,
+        chatJid: association.chatId,
+        action: type,
+      })
+    })
+
     socket.ev.on('messages.update', (updates) => {
       for (const update of updates) {
         const status = update.update.status
@@ -339,6 +424,46 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       body = document.caption ?? null
       fileName = document.fileName ?? null
       fileSize = document.fileLength ? Number(document.fileLength) : null
+    } else if (content.audioMessage) {
+      type = 'voice'
+    } else if (content.stickerMessage) {
+      type = 'sticker'
+    } else if (content.locationMessage ?? content.liveLocationMessage) {
+      type = 'location'
+      const loc = (content.locationMessage ?? content.liveLocationMessage) as {
+        name?: string
+        address?: string
+        degreesLatitude?: number
+        degreesLongitude?: number
+      }
+      body =
+        loc.name ??
+        loc.address ??
+        `${loc.degreesLatitude ?? ''},${loc.degreesLongitude ?? ''}`
+    } else if (content.contactMessage ?? content.contactsArrayMessage) {
+      type = 'contact'
+      body =
+        (content.contactMessage as { displayName?: string } | undefined)?.displayName ??
+        (content.contactsArrayMessage as { displayName?: string } | undefined)
+          ?.displayName ??
+        null
+    } else if (
+      content.pollCreationMessage ??
+      content.pollCreationMessageV2 ??
+      content.pollCreationMessageV3
+    ) {
+      type = 'poll'
+      body =
+        (
+          (content.pollCreationMessage ??
+            content.pollCreationMessageV2 ??
+            content.pollCreationMessageV3) as { name?: string }
+        ).name ?? null
+    } else if (content.eventMessage) {
+      type = 'event'
+      body = (content.eventMessage as { name?: string }).name ?? null
+    } else if (content.productMessage) {
+      type = 'product'
     } else if (content.buttonsResponseMessage ?? content.templateButtonReplyMessage) {
       type = 'buttons'
     } else if (content.listResponseMessage ?? content.interactiveResponseMessage) {
@@ -352,7 +477,7 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     return {
       id,
       chatId,
-      from: chatId.split('@')[0] ?? chatId,
+      from: senderPhone(raw, chatId),
       pushName: raw.pushName ?? null,
       isGroup: chatId.endsWith('@g.us'),
       type,
@@ -514,7 +639,416 @@ export class BaileysTransport extends TransportEmitter implements Transport {
         const body = message.footer ? `${text}\n\n${message.footer}` : text
         return { text: body, linkPreview: await resolveLinkPreview(body) }
       }
+
+      // Voice notes: WhatsApp renders `ptt` audio as a voice note only when it
+      // is Opus in Ogg; other formats arrive as a playable audio file.
+      case 'audio':
+        return {
+          audio: { url: message.path },
+          ptt: message.ptt,
+          mimetype: mimeFor(message.path),
+        }
+
+      case 'sticker':
+        return { sticker: { url: message.path } }
+
+      case 'location':
+        return {
+          location: {
+            degreesLatitude: message.latitude,
+            degreesLongitude: message.longitude,
+            ...(message.name ? { name: message.name } : {}),
+            ...(message.address ? { address: message.address } : {}),
+          },
+        }
+
+      case 'contacts':
+        return {
+          contacts: {
+            displayName:
+              message.contacts.length === 1
+                ? message.contacts[0]!.name
+                : `${message.contacts.length} contacts`,
+            contacts: message.contacts.map((c) => ({
+              displayName: c.name,
+              vcard: vcard(c.name, c.phone),
+            })),
+          },
+        }
+
+      case 'poll':
+        return {
+          poll: {
+            name: message.name,
+            values: message.options,
+            selectableCount: message.selectableCount,
+          },
+        }
+
+      case 'event':
+        return {
+          event: {
+            name: message.name,
+            ...(message.description ? { description: message.description } : {}),
+            startDate: new Date(message.startAt),
+            ...(message.endAt ? { endDate: new Date(message.endAt) } : {}),
+            ...(message.location ? { location: { name: message.location } } : {}),
+          },
+        }
+
+      // A product message needs an image. Without one, send the details as
+      // text rather than failing the recipient.
+      case 'product': {
+        if (!message.imageUrl) {
+          const price =
+            message.priceAmount1000 !== undefined && message.currency
+              ? `\n${(message.priceAmount1000 / 1000).toFixed(2)} ${message.currency}`
+              : ''
+          const text = [message.body, `*${message.title}*`, message.description]
+            .filter(Boolean)
+            .join('\n')
+          return { text: `${text}${price}`, linkPreview: null }
+        }
+        return {
+          product: {
+            productId: message.productId,
+            title: message.title,
+            ...(message.description ? { description: message.description } : {}),
+            ...(message.priceAmount1000 !== undefined
+              ? { priceAmount1000: message.priceAmount1000 }
+              : {}),
+            ...(message.currency ? { currencyCode: message.currency } : {}),
+            productImage: { url: message.imageUrl },
+          },
+          ...(message.body ? { body: message.body } : {}),
+        }
+      }
     }
+  }
+
+  private socketFor(deviceId: string): WASocket {
+    const session = this.sessions.get(deviceId)
+    if (!session?.connected) throw new Error(`device ${deviceId} is not connected`)
+    return session.socket
+  }
+
+  async presence(
+    deviceId: string,
+    to: string,
+    state: 'composing' | 'recording' | 'paused',
+  ): Promise<void> {
+    await this.socketFor(deviceId).sendPresenceUpdate(state, toJid(to))
+  }
+
+  private statusContent(content: StatusContent) {
+    if (content.kind === 'text') return { text: content.body }
+    const source = { url: content.path }
+    return content.mediaType === 'video'
+      ? { video: source, ...(content.caption ? { caption: content.caption } : {}) }
+      : { image: source, ...(content.caption ? { caption: content.caption } : {}) }
+  }
+
+  async postStatus(
+    deviceId: string,
+    content: StatusContent,
+    statusJidList: string[],
+  ): Promise<SendResult> {
+    const socket = this.socketFor(deviceId)
+    const sent = await socket.sendMessage(
+      'status@broadcast',
+      this.statusContent(content),
+      {
+        statusJidList: statusJidList.map(toJid),
+        ...(content.kind === 'text' && content.backgroundColor
+          ? { backgroundColor: content.backgroundColor }
+          : {}),
+      },
+    )
+    const id = sent?.key?.id
+    if (!id) throw new Error('status post returned no message id')
+    return { messageId: id }
+  }
+
+  async checkNumbers(
+    deviceId: string,
+    phones: string[],
+  ): Promise<WaResponses['number:check']> {
+    const socket = this.socketFor(deviceId)
+    const digits = phones.map((p) => p.replace(/\D/g, ''))
+    const found = (await socket.onWhatsApp(...digits)) ?? []
+    // Results come back keyed by JID, not in request order.
+    const byNumber = new Map(
+      found.filter((r) => r.exists).map((r) => [r.jid.split('@')[0] ?? '', r.jid]),
+    )
+    return {
+      results: phones.map((phone, i) => {
+        const jid = byNumber.get(digits[i] ?? '') ?? null
+        return { phone, exists: jid !== null, jid }
+      }),
+    }
+  }
+
+  async markRead(deviceId: string, chatJid: string, messageIds: string[]): Promise<void> {
+    await this.socketFor(deviceId).readMessages(
+      messageIds.map((id) => ({ remoteJid: chatJid, id, fromMe: false })),
+    )
+  }
+
+  private toMetadata(
+    group: Awaited<ReturnType<WASocket['groupMetadata']>>,
+  ): GroupMetadata {
+    return {
+      id: group.id,
+      name: group.subject,
+      description: group.desc ?? null,
+      participants: group.participants.map((p) => ({
+        jid: p.id,
+        phone: participantPhone(p.phoneNumber ?? p.id),
+        isAdmin: p.admin === 'admin' || p.admin === 'superadmin',
+      })),
+      announce: group.announce ?? false,
+      restrict: group.restrict ?? false,
+      joinApproval: group.joinApprovalMode ?? false,
+      isCommunity: group.isCommunity ?? false,
+      parentId: group.linkedParent ?? null,
+    }
+  }
+
+  async groupMetadata(deviceId: string, groupId: string): Promise<GroupMetadata> {
+    const socket = this.socketFor(deviceId)
+    return this.toMetadata(await socket.groupMetadata(groupId))
+  }
+
+  async groupInviteCode(deviceId: string, groupId: string): Promise<string> {
+    const code = await this.socketFor(deviceId).groupInviteCode(groupId)
+    if (!code) throw new Error('WhatsApp returned no invite code — are we an admin?')
+    return code
+  }
+
+  async groupRevokeInvite(deviceId: string, groupId: string): Promise<string> {
+    const code = await this.socketFor(deviceId).groupRevokeInvite(groupId)
+    if (!code) throw new Error('WhatsApp returned no new invite code')
+    return code
+  }
+
+  async groupAcceptInvite(deviceId: string, code: string): Promise<string> {
+    const groupId = await this.socketFor(deviceId).groupAcceptInvite(code)
+    if (!groupId) throw new Error('The invite link was not accepted')
+    return groupId
+  }
+
+  async groupSetting(deviceId: string, p: Payload<'group:setting'>): Promise<void> {
+    await this.socketFor(deviceId).groupSettingUpdate(p.groupId, p.setting)
+  }
+
+  async groupJoinApproval(
+    deviceId: string,
+    groupId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await this.socketFor(deviceId).groupJoinApprovalMode(groupId, enabled ? 'on' : 'off')
+  }
+
+  async groupDescription(
+    deviceId: string,
+    groupId: string,
+    description: string,
+  ): Promise<void> {
+    await this.socketFor(deviceId).groupUpdateDescription(groupId, description)
+  }
+
+  async groupRequests(
+    deviceId: string,
+    groupId: string,
+  ): Promise<WaResponses['group:requests']> {
+    const raw = await this.socketFor(deviceId).groupRequestParticipantsList(groupId)
+    return {
+      requests: raw
+        .filter((r) => typeof r.jid === 'string')
+        .map((r) => ({
+          jid: r.jid!,
+          phone: participantPhone(r.phone_number ?? r.jid!),
+          requestedAt: r.request_time
+            ? new Date(Number(r.request_time) * 1000).toISOString()
+            : null,
+        })),
+    }
+  }
+
+  async groupRequestsUpdate(
+    deviceId: string,
+    p: Payload<'group:requestsUpdate'>,
+  ): Promise<WaResponses['group:requestsUpdate']> {
+    const raw = await this.socketFor(deviceId).groupRequestParticipantsUpdate(
+      p.groupId,
+      p.jids,
+      p.action,
+    )
+    return {
+      results: raw.map((r, i) => ({
+        jid: r.jid ?? p.jids[i] ?? '',
+        ok: r.status === '200',
+        error: r.status === '200' ? null : `status ${r.status}`,
+      })),
+    }
+  }
+
+  async groupParticipants(
+    deviceId: string,
+    p: Payload<'group:participants'>,
+  ): Promise<WaResponses['group:participants']> {
+    const raw = await this.socketFor(deviceId).groupParticipantsUpdate(
+      p.groupId,
+      p.jids.map(toJid),
+      p.action,
+    )
+    // WhatsApp answers per participant: 200 ok, 403 privacy (needs an invite),
+    // 408 recently left, 409 already a member.
+    const reasons: Record<string, string> = {
+      '403': 'privacy settings block adding them — send an invite link instead',
+      '408': 'they left recently and cannot be re-added yet',
+      '409': 'already a member',
+    }
+    return {
+      results: raw.map((r, i) => ({
+        jid: r.jid ?? p.jids[i] ?? '',
+        ok: r.status === '200',
+        error: r.status === '200' ? null : (reasons[r.status] ?? `status ${r.status}`),
+      })),
+    }
+  }
+
+  async communityFetch(deviceId: string): Promise<WaResponses['community:fetch']> {
+    const socket = this.socketFor(deviceId)
+    const communities = Object.values(await socket.communityFetchAllParticipating())
+    const groups = Object.values(await socket.groupFetchAllParticipating())
+    return {
+      communities: communities.map((c) => ({
+        id: c.id,
+        name: c.subject,
+        linkedGroupIds: groups.filter((g) => g.linkedParent === c.id).map((g) => g.id),
+      })),
+    }
+  }
+
+  async communityCreate(
+    deviceId: string,
+    subject: string,
+    description: string,
+  ): Promise<WaResponses['community:create']> {
+    const created = await this.socketFor(deviceId).communityCreate(subject, description)
+    if (!created) throw new Error('WhatsApp did not create the community')
+    return { id: created.id, name: created.subject }
+  }
+
+  async communityLink(
+    deviceId: string,
+    communityId: string,
+    groupId: string,
+  ): Promise<void> {
+    await this.socketFor(deviceId).communityLinkGroup(groupId, communityId)
+  }
+
+  async communityUnlink(
+    deviceId: string,
+    communityId: string,
+    groupId: string,
+  ): Promise<void> {
+    await this.socketFor(deviceId).communityUnlinkGroup(groupId, communityId)
+  }
+
+  async communityCreateGroup(
+    deviceId: string,
+    p: Payload<'community:createGroup'>,
+  ): Promise<RemoteGroup> {
+    const created = await this.socketFor(deviceId).communityCreateGroup(
+      p.subject,
+      p.participants.map(toJid),
+      p.communityId,
+    )
+    if (!created) throw new Error('WhatsApp did not create the group')
+    return {
+      id: created.id,
+      name: created.subject,
+      memberCount: created.participants.length,
+      isAdmin: true,
+    }
+  }
+
+  async channelCreate(
+    deviceId: string,
+    name: string,
+    description: string,
+  ): Promise<WaResponses['channel:create']> {
+    const created = await this.socketFor(deviceId).newsletterCreate(name, description)
+    return { id: created.id, name: created.name, inviteCode: created.invite ?? null }
+  }
+
+  async channelFollow(
+    deviceId: string,
+    key: string,
+  ): Promise<WaResponses['channel:follow']> {
+    const socket = this.socketFor(deviceId)
+    const meta = await socket.newsletterMetadata(
+      key.endsWith('@newsletter') ? 'jid' : 'invite',
+      key,
+    )
+    if (!meta) throw new Error('No channel found for that link')
+    await socket.newsletterFollow(meta.id)
+    return {
+      id: meta.id,
+      name: meta.name,
+      description: meta.description ?? null,
+      subscribers: meta.subscribers ?? 0,
+      inviteCode: meta.invite ?? null,
+    }
+  }
+
+  async channelPost(
+    deviceId: string,
+    channelId: string,
+    content: StatusContent,
+  ): Promise<SendResult> {
+    const sent = await this.socketFor(deviceId).sendMessage(
+      channelId,
+      this.statusContent(content),
+    )
+    const id = sent?.key?.id
+    if (!id) throw new Error('channel post returned no message id')
+    return { messageId: id }
+  }
+
+  async fetchCatalog(deviceId: string): Promise<Product[]> {
+    const socket = this.socketFor(deviceId)
+    const own = ownJid(socket)
+    if (!own) throw new Error('device is not logged in yet')
+    const { products } = await socket.getCatalog({ jid: own, limit: 100 })
+    return products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description || null,
+      priceAmount1000: Number.isFinite(p.price) ? p.price : null,
+      currency: p.currency || null,
+      imageUrl: Object.values(p.imageUrls ?? {})[0] ?? null,
+    }))
+  }
+
+  async isBusiness(deviceId: string): Promise<boolean> {
+    const socket = this.socketFor(deviceId)
+    const own = ownJid(socket)
+    if (!own) return false
+    const profile = await socket.getBusinessProfile(own)
+    return Boolean(profile)
+  }
+
+  async chatLabel(deviceId: string, p: Payload<'chat:label'>): Promise<void> {
+    const socket = this.socketFor(deviceId)
+    if (p.action === 'add') await socket.addChatLabel(p.chatJid, p.labelId)
+    else await socket.removeChatLabel(p.chatJid, p.labelId)
+  }
+
+  async rejectCall(deviceId: string, callId: string, from: string): Promise<void> {
+    await this.socketFor(deviceId).rejectCall(callId, from)
   }
 
   async fetchGroups(deviceId: string): Promise<RemoteGroup[]> {

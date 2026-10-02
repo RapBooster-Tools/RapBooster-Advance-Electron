@@ -13,47 +13,25 @@
  * unrecoverable (CLAUDE.md §5.4).
  */
 import type { DeviceStatus } from '../../../shared/types'
-import type { WaButton } from '../../../shared/wa-protocol'
+import type {
+  WaGroupMetadata,
+  WaIncomingType,
+  WaOutgoing,
+  WaProduct,
+  WaRemoteGroup,
+  WaRequests,
+  WaResponses,
+  WaStatusContent,
+} from '../../../shared/wa-protocol'
 
-export interface OutgoingText {
-  kind: 'text'
-  body: string
-}
-
-export interface OutgoingMedia {
-  kind: 'media'
-  /** Absolute path inside the app's managed media store. */
-  path: string
-  mediaType: 'image' | 'video'
-  caption?: string
-}
-
-export interface OutgoingDocument {
-  kind: 'document'
-  path: string
-  fileName: string
-  caption?: string
-}
-
-export interface OutgoingButtons {
-  kind: 'buttons'
-  body: string
-  footer?: string
-  buttons: WaButton[]
-}
-
-/** A single-select list — what an interactive template sends. */
-export interface OutgoingList {
-  kind: 'list'
-  body: string
-  footer?: string
-  /** Label on the control that opens the list. */
-  buttonText: string
-  rows: Array<{ id: string; title: string; description?: string }>
-}
-
-export type OutgoingMessage =
-  OutgoingText | OutgoingMedia | OutgoingDocument | OutgoingButtons | OutgoingList
+/** Outgoing messages are exactly the protocol's shapes — one definition, no drift. */
+export type OutgoingMessage = WaOutgoing
+export type OutgoingText = Extract<WaOutgoing, { kind: 'text' }>
+export type OutgoingMedia = Extract<WaOutgoing, { kind: 'media' }>
+export type OutgoingDocument = Extract<WaOutgoing, { kind: 'document' }>
+export type OutgoingButtons = Extract<WaOutgoing, { kind: 'buttons' }>
+export type OutgoingList = Extract<WaOutgoing, { kind: 'list' }>
+export type StatusContent = WaStatusContent
 
 export interface SendResult {
   messageId: string
@@ -65,21 +43,17 @@ export interface IncomingMessage {
   from: string
   pushName: string | null
   isGroup: boolean
-  type: 'text' | 'media' | 'attachment' | 'buttons' | 'interactive'
+  type: WaIncomingType
   body: string | null
   fileName: string | null
   fileSize: number | null
   timestamp: string
 }
 
-export interface RemoteGroup {
-  id: string
-  name: string
-  memberCount: number
-  isAdmin: boolean
-}
+export type RemoteGroup = WaRemoteGroup
+export type GroupMetadata = WaGroupMetadata
+export type Product = WaProduct
 
-/** Reason a connection closed, normalized away from Baileys' status codes. */
 export type DisconnectKind = 'retryable' | 'logged_out'
 
 export interface TransportEvents {
@@ -91,32 +65,93 @@ export interface TransportEvents {
   qr: (deviceId: string, qr: string) => void
   pairingCode: (deviceId: string, code: string) => void
   message: (deviceId: string, message: IncomingMessage) => void
-  /** Delivery/read receipt for a message we sent. */
   receipt: (deviceId: string, messageId: string, status: 'delivered' | 'read') => void
   disconnected: (deviceId: string, kind: DisconnectKind, detail: string) => void
+  call: (
+    deviceId: string,
+    call: { callId: string; from: string; isVideo: boolean },
+  ) => void
+  label: (
+    deviceId: string,
+    label: { labelId: string; name: string; color: number; deleted: boolean },
+  ) => void
+  labelAssociation: (
+    deviceId: string,
+    association: { labelId: string; chatJid: string; action: 'add' | 'remove' },
+  ) => void
 }
 
+type Payload<K extends keyof WaRequests> = Omit<WaRequests[K], 'deviceId'>
+
 export interface Transport {
-  /**
-   * Open a session. Resolves once the socket is created — not once connected;
-   * connection progress arrives through the `status` event.
-   */
   connect(deviceId: string, authDir: string): Promise<void>
-  /** Request an 8-digit pairing code instead of a QR scan. */
   requestPairingCode(deviceId: string, phone: string): Promise<string>
-  /** Close the socket but keep credentials, so it can reconnect later. */
   disconnect(deviceId: string): Promise<void>
-  /** Close and invalidate credentials — the device must be re-linked. */
   logout(deviceId: string): Promise<void>
   isConnected(deviceId: string): boolean
   send(deviceId: string, to: string, message: OutgoingMessage): Promise<SendResult>
+  /** Show or clear "typing…"/"recording…" in a chat. Best effort. */
+  presence(
+    deviceId: string,
+    to: string,
+    state: 'composing' | 'recording' | 'paused',
+  ): Promise<void>
+  postStatus(
+    deviceId: string,
+    content: StatusContent,
+    statusJidList: string[],
+  ): Promise<SendResult>
+  checkNumbers(deviceId: string, phones: string[]): Promise<WaResponses['number:check']>
+  markRead(deviceId: string, chatJid: string, messageIds: string[]): Promise<void>
   fetchGroups(deviceId: string): Promise<RemoteGroup[]>
   createGroup(
     deviceId: string,
     subject: string,
     participants: string[],
   ): Promise<RemoteGroup>
-  /** Close every socket; called on app quit. */
+  groupMetadata(deviceId: string, groupId: string): Promise<GroupMetadata>
+  groupInviteCode(deviceId: string, groupId: string): Promise<string>
+  groupRevokeInvite(deviceId: string, groupId: string): Promise<string>
+  groupAcceptInvite(deviceId: string, code: string): Promise<string>
+  groupSetting(deviceId: string, p: Payload<'group:setting'>): Promise<void>
+  groupJoinApproval(deviceId: string, groupId: string, enabled: boolean): Promise<void>
+  groupDescription(deviceId: string, groupId: string, description: string): Promise<void>
+  groupRequests(deviceId: string, groupId: string): Promise<WaResponses['group:requests']>
+  groupRequestsUpdate(
+    deviceId: string,
+    p: Payload<'group:requestsUpdate'>,
+  ): Promise<WaResponses['group:requestsUpdate']>
+  groupParticipants(
+    deviceId: string,
+    p: Payload<'group:participants'>,
+  ): Promise<WaResponses['group:participants']>
+  communityFetch(deviceId: string): Promise<WaResponses['community:fetch']>
+  communityCreate(
+    deviceId: string,
+    subject: string,
+    description: string,
+  ): Promise<WaResponses['community:create']>
+  communityLink(deviceId: string, communityId: string, groupId: string): Promise<void>
+  communityUnlink(deviceId: string, communityId: string, groupId: string): Promise<void>
+  communityCreateGroup(
+    deviceId: string,
+    p: Payload<'community:createGroup'>,
+  ): Promise<RemoteGroup>
+  channelCreate(
+    deviceId: string,
+    name: string,
+    description: string,
+  ): Promise<WaResponses['channel:create']>
+  channelFollow(deviceId: string, key: string): Promise<WaResponses['channel:follow']>
+  channelPost(
+    deviceId: string,
+    channelId: string,
+    content: StatusContent,
+  ): Promise<SendResult>
+  fetchCatalog(deviceId: string): Promise<Product[]>
+  isBusiness(deviceId: string): Promise<boolean>
+  chatLabel(deviceId: string, p: Payload<'chat:label'>): Promise<void>
+  rejectCall(deviceId: string, callId: string, from: string): Promise<void>
   shutdown(): Promise<void>
   on<E extends keyof TransportEvents>(event: E, handler: TransportEvents[E]): void
 }

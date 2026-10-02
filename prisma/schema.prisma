@@ -53,11 +53,25 @@ model Device {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  // Warmup (IMPROVEMENT-PLAN.md, D89): a new number ramps its daily cap up
+  // over its first days instead of sending at full volume immediately.
+  warmupEnabled     Boolean   @default(false)
+  warmupStartedAt   DateTime?
+  // Health breaker: set when recent sends fail at a rate that suggests WhatsApp
+  // is restricting the account. Campaigns skip the device until it passes.
+  healthPausedUntil DateTime?
+  healthReason      String?
+  /// WhatsApp Business account — labels and catalogs exist only there.
+  isBusiness        Boolean   @default(false)
+
   campaignLinks   CampaignDevice[]
   recipients      CampaignRecipient[]
   groups          Group[]
   chats           Chat[]
   groupCreateJobs GroupCreateJob[]
+  channels        Channel[]
+  scheduledPosts  ScheduledPost[]
+  callEvents      CallEvent[]
 
   @@index([status])
 }
@@ -91,36 +105,87 @@ model Contact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  list       ContactList         @relation(fields: [listId], references: [id], onDelete: Cascade)
-  recipients CampaignRecipient[]
+  /// Result of the last "is this number on WhatsApp" check: unknown | valid | invalid.
+  waStatus    String    @default("unknown")
+  waCheckedAt DateTime?
+
+  list        ContactList          @relation(fields: [listId], references: [id], onDelete: Cascade)
+  recipients  CampaignRecipient[]
+  tags        ContactTag[]
+  enrollments SequenceEnrollment[]
 
   @@unique([listId, phone])
   @@index([listId, name])
   @@index([phone])
+  @@index([waStatus])
+}
+
+// ───────────────────────────── Tags and opt-outs ─────────────────────────────
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#0078d4")
+  /// manual | wa_label — WhatsApp Business labels are mirrored as tags.
+  source    String   @default("manual")
+  /// "<deviceId>:<labelId>" when source = wa_label.
+  waLabelId String?
+  createdAt DateTime @default(now())
+
+  contacts  ContactTag[]
+  campaigns CampaignTag[]
+
+  @@index([waLabelId])
+}
+
+model ContactTag {
+  contactId String
+  tagId     String
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+}
+
+/// Numbers that must never be messaged by a campaign, sequence or bot. Keyed by
+/// normalized phone so it applies across every list the number appears in.
+model Suppression {
+  phone     String   @id
+  reason    String?
+  /// manual | stop_keyword | import
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
 }
 
 // ─────────────────────────────── Templates ───────────────────────────────
 
 model Template {
-  id        String   @id @default(cuid())
-  name      String
-  type      String
-  content   String
-  mediaType String?
-  mediaPath String?
+  id             String   @id @default(cuid())
+  name           String
+  type           String
+  content        String
+  mediaType      String?
+  mediaPath      String?
   /// JSON string[] — rows of the single-select list an interactive template sends
-  options   String?
+  options        String?
   /// JSON TemplateButton[] — { type, label, value? }. Legacy rows hold string[].
-  buttons   String?
+  buttons        String?
   /// Small print under the body, on button and interactive templates
-  footer    String?
+  footer         String?
   /// Label on the control that opens an interactive template's list
   listButtonText String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  /// JSON payload for the rich types (voice, sticker, location, contact, poll,
+  /// event, product). Shape per type lives in shared/rich-message.ts.
+  extra          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  campaigns Campaign[]
-  groupJobs GroupSendJob[]
+  campaigns     Campaign[]
+  groupJobs     GroupSendJob[]
+  keywordRules  KeywordRule[]
+  sequenceSteps SequenceStep[]
 }
 
 // ─────────────────────────────── Campaigns ───────────────────────────────
@@ -142,12 +207,15 @@ model Campaign {
   sentCount     Int       @default(0)
   failedCount   Int       @default(0)
   lastError     String?
+  /// Verify each number is on WhatsApp before sending; non-users are skipped.
+  checkNumbers  Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   template   Template            @relation(fields: [templateId], references: [id])
   devices    CampaignDevice[]
   lists      CampaignList[]
+  tags       CampaignTag[]
   recipients CampaignRecipient[]
 
   @@index([status, scheduledAt])
@@ -177,21 +245,39 @@ model CampaignList {
 
 /// The durable send queue — one row per recipient. This is what makes campaigns
 /// pausable and crash-resumable (SPRINTS.md §6.2–§6.4).
-model CampaignRecipient {
-  id         String    @id @default(cuid())
+model CampaignTag {
   campaignId String
-  contactId  String
-  deviceId   String
+  tagId      String
+  /// include | exclude
+  mode       String @default("include")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, tagId])
+  @@index([tagId])
+}
+
+model CampaignRecipient {
+  id          String    @id @default(cuid())
+  campaignId  String
+  contactId   String
+  deviceId    String
   /// Snapshot, so editing a contact mid-run cannot corrupt the queue
-  phone      String
-  status     String    @default("pending")
-  attempts   Int       @default(0)
-  messageId  String?
-  error      String?
+  phone       String
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  messageId   String?
+  error       String?
   /// Set when the row is claimed (flipped to "sending")
-  claimedAt  DateTime?
-  sentAt     DateTime?
-  createdAt  DateTime  @default(now())
+  claimedAt   DateTime?
+  sentAt      DateTime?
+  // Analytics (IMPROVEMENT-PLAN.md Phase 3): from WhatsApp receipts and inbound
+  // replies within the attribution window.
+  deliveredAt DateTime?
+  readAt      DateTime?
+  repliedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -201,17 +287,27 @@ model CampaignRecipient {
   @@unique([campaignId, contactId])
   @@index([campaignId, status])
   @@index([deviceId, status])
+  @@index([messageId])
+  @@index([phone, sentAt])
 }
 
 // ───────────────────────────────── Groups ────────────────────────────────
 
 model Group {
-  id          String   @id
-  deviceId    String
-  name        String
-  memberCount Int      @default(0)
-  isAdmin     Boolean  @default(false)
-  syncedAt    DateTime @default(now())
+  id           String   @id
+  deviceId     String
+  name         String
+  memberCount  Int      @default(0)
+  isAdmin      Boolean  @default(false)
+  isCommunity  Boolean  @default(false)
+  /// The community this group is linked into, when it is.
+  parentId     String?
+  /// Only admins can send messages.
+  announce     Boolean  @default(false)
+  /// Only admins can edit group info.
+  restrict     Boolean  @default(false)
+  joinApproval Boolean  @default(false)
+  syncedAt     DateTime @default(now())
 
   device  Device            @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   targets GroupSendTarget[]
@@ -288,11 +384,13 @@ model Chat {
   lastMessage     String?
   unreadCount     Int       @default(0)
   isEscalated     Boolean   @default(false)
+  escalatedAt     DateTime?
   autoReplyOptOut Boolean   @default(false)
   createdAt       DateTime  @default(now())
 
   device   Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   messages Message[]
+  drafts   AiDraft[]
 
   @@index([deviceId, lastMessageAt])
 }
@@ -319,28 +417,32 @@ model Message {
 }
 
 model ChatbotConfig {
-  id                  String   @id @default("singleton")
-  enabled             Boolean  @default(true)
-  systemInstructions  String   @default("")
-  businessName        String?
-  businessEmail       String?
-  businessPhone       String?
-  responseDelay       Int      @default(2)
-  tone                String   @default("professional")
-  industry            String?
-  primaryGoal         String   @default("support")
-  responseStyle       String   @default("conversational")
-  language            String   @default("english")
-  escalationTrigger   String   @default("keywords")
+  id                    String   @id @default("singleton")
+  enabled               Boolean  @default(true)
+  systemInstructions    String   @default("")
+  businessName          String?
+  businessEmail         String?
+  businessPhone         String?
+  responseDelay         Int      @default(2)
+  tone                  String   @default("professional")
+  industry              String?
+  primaryGoal           String   @default("support")
+  responseStyle         String   @default("conversational")
+  language              String   @default("english")
+  escalationTrigger     String   @default("keywords")
   /// JSON string[]
-  escalationKeywords  String   @default("[]")
-  escalationMessage   String?
-  confidenceThreshold Int      @default(75)
+  escalationKeywords    String   @default("[]")
+  escalationMessage     String?
+  confidenceThreshold   Int      @default(75)
+  /// escalationTrigger = messages: hand over after this many bot replies in a chat.
+  escalateAfterMessages Int      @default(0)
+  /// escalationTrigger = time: hand over when a conversation has run this long.
+  escalateAfterMinutes  Int      @default(0)
   /// Raw bulk text, "Name | Description" per line
-  products            String   @default("")
+  products              String   @default("")
   /// Raw bulk text, "Q: … | A: …" per line
-  knowledgeBase       String   @default("")
-  updatedAt           DateTime @updatedAt
+  knowledgeBase         String   @default("")
+  updatedAt             DateTime @updatedAt
 }
 
 // ──────────────────────────────── Settings ───────────────────────────────
@@ -350,4 +452,233 @@ model Setting {
   value       String
   isEncrypted Boolean  @default(false)
   updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────── Channels and status ───────────────────────────
+
+/// A WhatsApp Channel (newsletter) this device owns or follows.
+model Channel {
+  id          String   @id
+  deviceId    String
+  name        String
+  description String?
+  /// owner | admin | subscriber
+  role        String   @default("owner")
+  subscribers Int      @default(0)
+  inviteCode  String?
+  syncedAt    DateTime @default(now())
+
+  device Device          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  posts  ScheduledPost[]
+
+  @@index([deviceId])
+}
+
+/// A status (story) update or channel post, sent now or at `scheduledAt`.
+model ScheduledPost {
+  id              String    @id @default(cuid())
+  deviceId        String
+  /// status | channel
+  target          String
+  channelId       String?
+  /// text | image | video
+  kind            String
+  body            String    @default("")
+  mediaPath       String?
+  backgroundColor String?
+  /// Status audience: contact lists whose numbers may view it. Empty = every
+  /// contact on file.
+  listIds         String    @default("[]")
+  scheduledAt     DateTime
+  /// scheduled | posting | posted | failed | cancelled
+  status          String    @default("scheduled")
+  postedAt        DateTime?
+  messageId       String?
+  error           String?
+  createdAt       DateTime  @default(now())
+
+  device  Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  channel Channel? @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@index([deviceId])
+}
+
+// ──────────────────────────────── Automation ───────────────────────────────
+
+/// Rule-based auto-reply, evaluated before the AI bot.
+model KeywordRule {
+  id              String    @id @default(cuid())
+  name            String
+  keywords        String    @default("[]")
+  /// contains | exact | starts_with
+  matchType       String    @default("contains")
+  replyText       String?
+  templateId      String?
+  /// Devices this rule answers on; empty = all.
+  deviceIds       String    @default("[]")
+  enabled         Boolean   @default(true)
+  priority        Int       @default(0)
+  cooldownMinutes Int       @default(10)
+  hitCount        Int       @default(0)
+  lastHitAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  template Template?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  hits     KeywordRuleHit[]
+
+  @@index([enabled, priority])
+}
+
+/// Last time a rule answered a chat, so a rule cannot loop with another bot.
+model KeywordRuleHit {
+  ruleId String
+  chatId String
+  lastAt DateTime
+
+  rule KeywordRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@id([ruleId, chatId])
+}
+
+model Webhook {
+  id              String    @id @default(cuid())
+  url             String
+  /// JSON array of event names.
+  events          String    @default("[]")
+  /// HMAC signing secret, stored through secure-store.
+  secret          String
+  enabled         Boolean   @default(true)
+  lastStatus      Int?
+  lastError       String?
+  lastDeliveredAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  deliveries WebhookDelivery[]
+}
+
+/// Persisted outbox, so a delivery survives a restart and retries with backoff.
+model WebhookDelivery {
+  id            String    @id @default(cuid())
+  webhookId     String
+  event         String
+  payload       String
+  /// pending | delivered | failed
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  deliveredAt   DateTime?
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([webhookId])
+}
+
+/// A drip sequence: timed follow-up messages that stop when the contact replies.
+model Sequence {
+  id          String   @id @default(cuid())
+  name        String
+  /// active | paused | archived
+  status      String   @default("active")
+  deviceIds   String   @default("[]")
+  stopOnReply Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+
+  @@index([status])
+}
+
+model SequenceStep {
+  id           String @id @default(cuid())
+  sequenceId   String
+  position     Int
+  templateId   String
+  /// Wait after enrollment (step 0) or after the previous step.
+  delayMinutes Int    @default(0)
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template Template @relation(fields: [templateId], references: [id])
+
+  @@unique([sequenceId, position])
+  @@index([templateId])
+}
+
+model SequenceEnrollment {
+  id            String    @id @default(cuid())
+  sequenceId    String
+  contactId     String
+  phone         String
+  deviceId      String?
+  nextStep      Int       @default(0)
+  nextRunAt     DateTime?
+  /// active | sending | completed | stopped | failed
+  status        String    @default("active")
+  stoppedReason String?
+  lastSentAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, contactId])
+  @@index([status, nextRunAt])
+  @@index([phone])
+}
+
+// ──────────────────────────────── AI and calls ─────────────────────────────
+
+/// Token usage per model call, for the cost panel and the reply caps.
+model AiUsage {
+  id               String   @id @default(cuid())
+  deviceId         String?
+  chatId           String?
+  provider         String
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([chatId, createdAt])
+  @@index([deviceId, createdAt])
+}
+
+/// An AI reply that did not go straight out: awaiting approval, or held by
+/// quiet hours until the window ends.
+model AiDraft {
+  id        String    @id @default(cuid())
+  chatId    String
+  deviceId  String
+  text      String
+  /// pending_approval | held | sent | discarded
+  status    String
+  reason    String?
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([chatId])
+}
+
+model CallEvent {
+  id       String   @id
+  deviceId String
+  from     String
+  isVideo  Boolean  @default(false)
+  rejected Boolean  @default(false)
+  replied  Boolean  @default(false)
+  at       DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, at])
 }

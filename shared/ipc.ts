@@ -14,6 +14,12 @@
 import { z } from 'zod'
 import type { IpcChannelName, IpcEventName } from './channels'
 import type { SerializedError } from './errors'
+import { audienceChannels, audienceEvents } from './contract/audience'
+import { automationChannels, automationEvents } from './contract/automation'
+import { broadcastChannels, broadcastEvents } from './contract/broadcast'
+import { groupChannels } from './contract/groups'
+import { messagingChannels, messagingEvents } from './contract/messaging'
+import { inboxRichMessage, richPayload } from './rich-message'
 import {
   campaignStatus,
   deviceStatus,
@@ -28,7 +34,10 @@ import {
   suffixRule,
   templateButton,
   templateType,
+  waNumberStatus,
+  aiProvider,
   waServiceState,
+  clockTime,
   MAX_LIST_ROWS,
   MAX_TEMPLATE_BUTTONS,
 } from './types'
@@ -80,6 +89,14 @@ export const device = z.object({
   lastError: z.string().nullable(),
   dailySentCount: z.number().int().min(0),
   createdAt: isoDate,
+  warmupEnabled: z.boolean(),
+  /** Day N of warmup (1-based), or null when warmup is off. */
+  warmupDay: z.number().int().min(1).nullable(),
+  /** Today's effective cap after warmup; null = unlimited. */
+  effectiveCap: z.number().int().min(0).nullable(),
+  healthPausedUntil: nullableIso,
+  healthReason: z.string().nullable(),
+  isBusiness: z.boolean(),
 })
 
 export const contactList = z.object({
@@ -97,6 +114,8 @@ export const contact = z.object({
   phone: z.string(),
   data: z.record(z.string(), z.string()),
   isValid: z.boolean(),
+  waStatus: waNumberStatus,
+  tagIds: z.array(id),
 })
 
 export const template = z.object({
@@ -110,6 +129,8 @@ export const template = z.object({
   buttons: z.array(templateButton).max(MAX_TEMPLATE_BUTTONS).nullable(),
   footer: z.string().nullable(),
   listButtonText: z.string().nullable(),
+  /** Rich types' payload (location, contact, poll, event, product). */
+  extra: richPayload.nullable(),
   createdAt: isoDate,
 })
 
@@ -130,6 +151,13 @@ export const campaign = z.object({
   sentCount: z.number().int().min(0),
   failedCount: z.number().int().min(0),
   createdAt: isoDate,
+  includeTagIds: z.array(id),
+  excludeTagIds: z.array(id),
+  checkNumbers: z.boolean(),
+  skippedCount: z.number().int().min(0),
+  deliveredCount: z.number().int().min(0),
+  readCount: z.number().int().min(0),
+  repliedCount: z.number().int().min(0),
 })
 
 export const campaignRecipient = z.object({
@@ -141,6 +169,9 @@ export const campaignRecipient = z.object({
   attempts: z.number().int().min(0),
   error: z.string().nullable(),
   sentAt: nullableIso,
+  deliveredAt: nullableIso,
+  readAt: nullableIso,
+  repliedAt: nullableIso,
 })
 
 export const group = z.object({
@@ -149,6 +180,11 @@ export const group = z.object({
   name: z.string(),
   memberCount: z.number().int().min(0),
   isAdmin: z.boolean(),
+  isCommunity: z.boolean(),
+  parentId: z.string().nullable(),
+  announce: z.boolean(),
+  restrict: z.boolean(),
+  joinApproval: z.boolean(),
   syncedAt: isoDate,
 })
 
@@ -162,6 +198,11 @@ export const chat = z.object({
   lastMessageAt: nullableIso,
   unreadCount: z.number().int().min(0),
   isEscalated: z.boolean(),
+  autoReplyOptOut: z.boolean(),
+  /** AI replies waiting for approval or held by quiet hours. */
+  pendingDrafts: z.number().int().min(0),
+  /** The number is on the opt-out list. */
+  optedOut: z.boolean(),
 })
 
 export const message = z.object({
@@ -195,6 +236,8 @@ export const chatbotConfig = z.object({
   escalationKeywords: z.array(z.string()),
   escalationMessage: z.string().nullable(),
   confidenceThreshold: z.number().int().min(0).max(100),
+  escalateAfterMessages: z.number().int().min(0).max(100),
+  escalateAfterMinutes: z.number().int().min(0).max(10_080),
   products: z.string(),
   knowledgeBase: z.string(),
 })
@@ -209,6 +252,17 @@ export const sendingDefaults = z.object({
   dailyCapPerDevice: z.number().int().min(0),
   retryAttempts: z.number().int().min(0).max(10),
   maxConcurrentDevices: z.number().int().min(1).max(20),
+  quietHoursEnabled: z.boolean(),
+  quietHoursStart: clockTime,
+  quietHoursEnd: clockTime,
+  /** "typing…" / "recording…" before automated sends. */
+  simulateTyping: z.boolean(),
+  /** Mark incoming messages read when the bot or a rule answers them. */
+  markReadOnReply: z.boolean(),
+  /** Pause a device whose recent sends fail at a ban-like rate. */
+  healthBreaker: z.boolean(),
+  /** Hours after a send during which an inbound message counts as a reply. */
+  attributionHours: z.number().int().min(1).max(720),
 })
 
 export const dashboardStats = z.object({
@@ -278,6 +332,8 @@ export const ipcContract = {
     request: z.object({
       listId: id,
       search: z.string().optional(),
+      tagId: id.optional(),
+      waStatus: waNumberStatus.optional(),
       cursor,
       limit: pageLimit,
     }),
@@ -334,7 +390,10 @@ export const ipcContract = {
     request: z.object({
       name: z.string().min(1),
       type: templateType,
-      content: z.string().min(1),
+      // Not .min(1): a voice note or sticker has no text. The handler requires
+      // content for every type that displays it.
+      content: z.string(),
+      extra: richPayload.optional(),
       mediaType: mediaType.optional(),
       mediaSourcePath: z.string().optional(),
       options: z.array(z.string()).max(MAX_LIST_ROWS).optional(),
@@ -348,7 +407,8 @@ export const ipcContract = {
     request: z.object({
       id,
       name: z.string().min(1).optional(),
-      content: z.string().min(1).optional(),
+      content: z.string().optional(),
+      extra: richPayload.optional(),
       mediaType: mediaType.optional(),
       mediaSourcePath: z.string().optional(),
       options: z.array(z.string()).max(MAX_LIST_ROWS).optional(),
@@ -391,6 +451,10 @@ export const ipcContract = {
       delayTo: z.number().int().min(0).max(300),
       sleepDuration: z.number().int().min(0).max(600),
       sleepAfter: z.number().int().min(1).max(100),
+      /** Audience = lists ∪ included tags, minus excluded tags. */
+      includeTagIds: z.array(id).default([]),
+      excludeTagIds: z.array(id).default([]),
+      checkNumbers: z.boolean().default(false),
     }),
     response: campaign,
   },
@@ -452,6 +516,10 @@ export const ipcContract = {
       delaySeconds: z.number().int().min(0).max(60),
       listIds: z.array(id).default([]),
       contactsPerGroup: z.number().int().min(0).max(500),
+      description: z.string().max(2048).optional(),
+      /** Only admins can send. */
+      announce: z.boolean().default(false),
+      joinApproval: z.boolean().default(false),
     }),
     response: z.object({ jobId: id }),
   },
@@ -470,6 +538,8 @@ export const ipcContract = {
     request: z.object({
       deviceId: id.optional(),
       search: z.string().optional(),
+      /** escalated = handed to a human; drafts = AI replies awaiting a person. */
+      filter: z.enum(['all', 'unread', 'escalated', 'drafts']).default('all'),
       cursor,
       limit: pageLimit,
     }),
@@ -496,12 +566,19 @@ export const ipcContract = {
   },
   /** Hand an escalated chat back to the auto-responder. */
   'chat:resumeBot': { request: z.object({ chatId: id }), response: ok },
+  'chat:sendRich': {
+    request: z.object({ chatId: id, message: inboxRichMessage }),
+    response: message,
+  },
 
   // ── Chatbot ──
   'chatbot:get': { request: z.void(), response: chatbotConfig },
   'chatbot:save': { request: chatbotConfig, response: chatbotConfig },
   'chatbot:testKey': {
-    request: z.object({ apiKey: z.string().min(1).optional() }),
+    request: z.object({
+      apiKey: z.string().min(1).optional(),
+      provider: aiProvider.optional(),
+    }),
     response: z.object({ valid: z.boolean(), detail: z.string().nullable() }),
   },
 
@@ -527,7 +604,15 @@ export const ipcContract = {
     }),
   },
   'settings:getSendingDefaults': { request: z.void(), response: sendingDefaults },
-  'settings:setSendingDefaults': { request: sendingDefaults, response: sendingDefaults },
+  /**
+   * A partial update, merged onto the stored values: a screen that edits only
+   * some fields must not have to round-trip the rest, and adding a setting must
+   * not break every caller that predates it.
+   */
+  'settings:setSendingDefaults': {
+    request: sendingDefaults.partial(),
+    response: sendingDefaults,
+  },
 
   // ── System ──
   'system:dashboard': { request: z.void(), response: dashboardStats },
@@ -569,12 +654,26 @@ export const ipcContract = {
     request: z.void(),
     response: z.object({ state: waServiceState, restartCount: z.number().int().min(0) }),
   },
+
+  // ── Marketing suite (D89) — one file per domain under shared/contract/ ──
+  ...audienceChannels,
+  ...groupChannels,
+  ...broadcastChannels,
+  ...messagingChannels,
+  ...automationChannels,
 } as const
 
 export type IpcContract = typeof ipcContract
 export type IpcChannel = keyof IpcContract
 
+/** What a handler receives: the request after parsing, with defaults applied. */
 export type IpcRequest<C extends IpcChannel> = z.infer<IpcContract[C]['request']>
+/**
+ * What a caller sends: the request before parsing, so fields with a default may
+ * be omitted. Without this split, adding `.default()` to a field would force
+ * every existing caller to pass it.
+ */
+export type IpcRequestInput<C extends IpcChannel> = z.input<IpcContract[C]['request']>
 export type IpcResponse<C extends IpcChannel> = z.infer<IpcContract[C]['response']>
 
 export const IPC_CHANNELS = Object.keys(ipcContract) as IpcChannel[]
@@ -631,6 +730,10 @@ export const ipcEvents = {
     level: z.enum(['info', 'success', 'warning', 'error']),
     message: z.string(),
   }),
+  ...audienceEvents,
+  ...broadcastEvents,
+  ...messagingEvents,
+  ...automationEvents,
 } as const
 
 export type IpcEvents = typeof ipcEvents

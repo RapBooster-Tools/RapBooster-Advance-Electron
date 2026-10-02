@@ -18,7 +18,7 @@
     // Inline HTML is used deliberately for the status callouts.
     "MD033": false,
     // The first line of every document is its title; no front matter here.
-    "MD041": true
+    "MD041": true,
   },
   "globs": ["**/*.md"],
   // test-results/ and playwright-report/ hold generated failure artifacts, not
@@ -35,6 +35,6 @@
     // Graphify output is regenerated wholesale each sprint; its formatting is
     // the tool's, not ours, so linting it would fail on every refresh.
     "graphify-out/**",
-    "GRAPH_REPORT.md"
-  ]
+    "GRAPH_REPORT.md",
+  ],
 }

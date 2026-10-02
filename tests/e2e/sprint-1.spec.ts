@@ -243,14 +243,18 @@ test('E1.10c — every sidebar route navigates without console errors', async ({
   })
   win.on('pageerror', (err) => errors.push(err.message))
 
-  // Sidebar order and titles come from the prototype (SPRINTS.md §2).
+  // Sidebar order and titles come from the prototype (SPRINTS.md §2), plus the
+  // D89 screens.
   const routes: Array<[string, string]> = [
     ['nav-inbox', 'Unified inbox'],
     ['nav-campaigns', 'WhatsApp Bulk Campaigns'],
+    ['nav-sequences', 'Drip Sequences'],
+    ['nav-broadcast', 'Status & Channels'],
     ['nav-groups', 'WhatsApp Groups'],
     ['nav-devices', 'WhatsApp Devices'],
     ['nav-contacts', 'Contact Lists'],
     ['nav-templates', 'WhatsApp Templates'],
+    ['nav-automation', 'Automation'],
     ['nav-chatbot', 'AI Chatbot Configuration'],
     ['nav-settings', 'Settings'],
     ['nav-dashboard', 'Dashboard'],

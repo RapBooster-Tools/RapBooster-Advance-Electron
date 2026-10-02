@@ -41,6 +41,8 @@ export function registerChatbotHandlers(): void {
       escalationKeywords: parseKeywords(config.escalationKeywords),
       escalationMessage: config.escalationMessage,
       confidenceThreshold: config.confidenceThreshold,
+      escalateAfterMessages: config.escalateAfterMessages,
+      escalateAfterMinutes: config.escalateAfterMinutes,
       products: config.products,
       knowledgeBase: config.knowledgeBase,
     }
@@ -66,6 +68,8 @@ export function registerChatbotHandlers(): void {
         escalationKeywords: JSON.stringify(input.escalationKeywords),
         escalationMessage: input.escalationMessage,
         confidenceThreshold: input.confidenceThreshold,
+        escalateAfterMessages: input.escalateAfterMessages,
+        escalateAfterMinutes: input.escalateAfterMinutes,
         products: input.products,
         knowledgeBase: input.knowledgeBase,
       },

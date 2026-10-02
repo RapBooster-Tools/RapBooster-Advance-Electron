@@ -459,10 +459,13 @@ test('E3.18 — the report lists every recipient with its outcome', async () => 
 
     const csv = readFileSync(report.data.filePath, 'utf8')
     expect(csv).toContain('# Campaign,Reported')
-    expect(csv).toContain('phone,name,device,status,attempts,sentAt,error')
+    expect(csv).toContain(
+      'phone,name,device,status,attempts,sentAt,deliveredAt,readAt,repliedAt,error',
+    )
     expect(csv).toContain('+91')
-    // Header block plus column header plus 12 data rows.
-    expect(csv.trim().split('\n')).toHaveLength(7 + 1 + 12)
+    // Header block (11 lines since D89 added skipped/delivered/read/replied),
+    // the column header, and 12 data rows.
+    expect(csv.trim().split('\n')).toHaveLength(11 + 1 + 12)
   } finally {
     await app.close()
     cleanupUserDataDir(dir)

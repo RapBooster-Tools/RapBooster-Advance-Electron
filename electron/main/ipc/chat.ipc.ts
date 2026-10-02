@@ -49,7 +49,12 @@ function serializeMessage(row: {
   }
 }
 
-function serializeChat(row: {
+/** A chat's number as E.164 — chats store it with or without the plus. */
+export function chatE164(phone: string): string {
+  return phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`
+}
+
+interface ChatRow {
   id: string
   deviceId: string
   name: string
@@ -59,7 +64,36 @@ function serializeChat(row: {
   lastMessageAt: Date | null
   unreadCount: number
   isEscalated: boolean
-}) {
+  autoReplyOptOut: boolean
+}
+
+/** Draft counts and opt-out status for a page of chats, in two queries. */
+async function chatExtras(rows: ChatRow[]) {
+  const prisma = getPrisma()
+  const ids = rows.map((r) => r.id)
+  const [drafts, suppressed] = await Promise.all([
+    prisma.aiDraft.groupBy({
+      by: ['chatId'],
+      where: { chatId: { in: ids }, status: { in: ['pending_approval', 'held'] } },
+      _count: { _all: true },
+    }),
+    prisma.suppression.findMany({
+      where: {
+        phone: { in: rows.filter((r) => !r.isGroup).map((r) => chatE164(r.phone)) },
+      },
+      select: { phone: true },
+    }),
+  ])
+  return {
+    drafts: new Map(drafts.map((d) => [d.chatId, d._count._all])),
+    suppressed: new Set(suppressed.map((x) => x.phone)),
+  }
+}
+
+function serializeChat(
+  row: ChatRow,
+  extras: { drafts: Map<string, number>; suppressed: Set<string> },
+) {
   return {
     id: row.id,
     deviceId: row.deviceId,
@@ -70,13 +104,21 @@ function serializeChat(row: {
     lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
     unreadCount: row.unreadCount,
     isEscalated: row.isEscalated,
+    autoReplyOptOut: row.autoReplyOptOut,
+    pendingDrafts: extras.drafts.get(row.id) ?? 0,
+    optedOut: !row.isGroup && extras.suppressed.has(chatE164(row.phone)),
   }
 }
 
 export function registerChatHandlers(): void {
-  registerHandler('chat:list', async ({ deviceId, search, cursor, limit }) => {
+  registerHandler('chat:list', async ({ deviceId, search, filter, cursor, limit }) => {
     const where = {
       ...(deviceId ? { deviceId } : {}),
+      ...(filter === 'unread' ? { unreadCount: { gt: 0 } } : {}),
+      ...(filter === 'escalated' ? { isEscalated: true } : {}),
+      ...(filter === 'drafts'
+        ? { drafts: { some: { status: { in: ['pending_approval', 'held'] } } } }
+        : {}),
       ...(search && search.trim() !== ''
         ? {
             OR: [
@@ -101,8 +143,9 @@ export function registerChatHandlers(): void {
     const hasMore = rows.length > limit
     const page = hasMore ? rows.slice(0, limit) : rows
 
+    const extras = await chatExtras(page)
     return {
-      items: page.map(serializeChat),
+      items: page.map((row) => serializeChat(row, extras)),
       nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
       total,
     }
@@ -112,7 +155,7 @@ export function registerChatHandlers(): void {
     const chat = await getPrisma().chat.findUnique({ where: { id } })
     if (!chat)
       throw new AppError('NOT_FOUND', { userMessage: 'That chat no longer exists.' })
-    return serializeChat(chat)
+    return serializeChat(chat, await chatExtras([chat]))
   })
 
   registerHandler('chat:messages', async ({ chatId, before, limit }) => {
@@ -176,6 +219,8 @@ export function registerChatHandlers(): void {
         deviceId: chat.deviceId,
         to: chat.id,
         message,
+        // A person typing a reply: exempt from quiet hours and the daily cap (D89).
+        manual: true,
       })
       messageId = result.messageId
     } catch (err) {
@@ -262,7 +307,10 @@ export async function persistIncoming(
       id: incoming.chatId,
       deviceId,
       name: incoming.pushName ?? incoming.from,
-      phone: incoming.from,
+      // A group's "phone" is its id; `from` is the member who wrote.
+      phone: incoming.isGroup
+        ? (incoming.chatId.split('@')[0] ?? incoming.chatId)
+        : incoming.from,
       isGroup: incoming.isGroup,
       lastMessage: incoming.body,
       lastMessageAt: new Date(incoming.timestamp),

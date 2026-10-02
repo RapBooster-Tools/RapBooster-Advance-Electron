@@ -23,6 +23,8 @@ interface Config {
   escalationKeywords: string[]
   escalationMessage: string | null
   confidenceThreshold: number
+  escalateAfterMessages: number
+  escalateAfterMinutes: number
   products: string
   knowledgeBase: string
 }

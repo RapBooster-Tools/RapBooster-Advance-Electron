@@ -23,6 +23,13 @@ const TYPE_LABEL: Record<TemplateType, string> = {
   media: 'With Media (Image/Video)',
   interactive: 'Interactive Message',
   button: 'Button Message',
+  voice: 'Voice Note',
+  sticker: 'Sticker',
+  location: 'Location',
+  contact: 'Contact Card',
+  poll: 'Poll',
+  event: 'Event Invite',
+  product: 'Catalog Product',
 }
 
 /** Types that carry tappable UI, and so offer a footer (REQUIREMENTS §7.9). */

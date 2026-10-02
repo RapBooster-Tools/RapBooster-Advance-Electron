@@ -12,6 +12,7 @@ import { getPrisma } from '../db/client'
 import { userDataDir } from '../db/paths'
 import { exportCsv, importCsv, previewCsv, type ImportRow } from '../services/csv'
 import { normalizePhone } from '../services/phone'
+import type { WaNumberStatus } from '../../../shared/types'
 import { registerHandler } from './router'
 import { mkdirSync } from 'node:fs'
 
@@ -59,6 +60,9 @@ function serializeList(row: {
   }
 }
 
+/** Every contact query includes this, so rows always carry their tag ids. */
+const WITH_TAGS = { tags: { select: { tagId: true } } } as const
+
 function serializeContact(row: {
   id: string
   listId: string
@@ -66,6 +70,8 @@ function serializeContact(row: {
   phone: string
   data: string
   isValid: boolean
+  waStatus: string
+  tags: Array<{ tagId: string }>
 }) {
   return {
     id: row.id,
@@ -74,6 +80,8 @@ function serializeContact(row: {
     phone: row.phone,
     data: parseData(row.data),
     isValid: row.isValid,
+    waStatus: row.waStatus as WaNumberStatus,
+    tagIds: row.tags.map((t) => t.tagId),
   }
 }
 
@@ -160,41 +168,47 @@ export function registerContactHandlers(): void {
 
   // ── contacts ──
 
-  registerHandler('contacts:list', async ({ listId, search, cursor, limit }) => {
-    await requireList(listId)
+  registerHandler(
+    'contacts:list',
+    async ({ listId, search, tagId, waStatus, cursor, limit }) => {
+      await requireList(listId)
 
-    const where = {
-      listId,
-      ...(search && search.trim() !== ''
-        ? {
-            OR: [
-              { name: { contains: search.trim() } },
-              { phone: { contains: search.trim() } },
-            ],
-          }
-        : {}),
-    }
+      const where = {
+        listId,
+        ...(tagId ? { tags: { some: { tagId } } } : {}),
+        ...(waStatus ? { waStatus } : {}),
+        ...(search && search.trim() !== ''
+          ? {
+              OR: [
+                { name: { contains: search.trim() } },
+                { phone: { contains: search.trim() } },
+              ],
+            }
+          : {}),
+      }
 
-    const [rows, total] = await Promise.all([
-      getPrisma().contact.findMany({
-        where,
-        orderBy: { id: 'asc' },
-        take: limit + 1,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      }),
-      getPrisma().contact.count({ where }),
-    ])
+      const [rows, total] = await Promise.all([
+        getPrisma().contact.findMany({
+          where,
+          include: WITH_TAGS,
+          orderBy: { id: 'asc' },
+          take: limit + 1,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        }),
+        getPrisma().contact.count({ where }),
+      ])
 
-    // One extra row is fetched purely to know whether another page exists.
-    const hasMore = rows.length > limit
-    const page = hasMore ? rows.slice(0, limit) : rows
+      // One extra row is fetched purely to know whether another page exists.
+      const hasMore = rows.length > limit
+      const page = hasMore ? rows.slice(0, limit) : rows
 
-    return {
-      items: page.map(serializeContact),
-      nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
-      total,
-    }
-  })
+      return {
+        items: page.map(serializeContact),
+        nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+        total,
+      }
+    },
+  )
 
   registerHandler('contacts:create', async ({ listId, data }) => {
     await requireList(listId)
@@ -217,6 +231,7 @@ export function registerContactHandlers(): void {
         data: JSON.stringify(payload),
         isValid: normalized.valid,
       },
+      include: WITH_TAGS,
     })
     await refreshCount(listId)
     return serializeContact(created)
@@ -242,7 +257,12 @@ export function registerContactHandlers(): void {
         phone: normalized.e164,
         data: JSON.stringify(payload),
         isValid: normalized.valid,
+        // A changed number has not been checked against WhatsApp yet.
+        ...(normalized.e164 !== existing.phone
+          ? { waStatus: 'unknown', waCheckedAt: null }
+          : {}),
       },
+      include: WITH_TAGS,
     })
     return serializeContact(updated)
   })

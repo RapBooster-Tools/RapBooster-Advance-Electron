@@ -9,40 +9,19 @@
 import { AppError } from '../../../shared/errors'
 import { getPrisma } from '../db/client'
 import { encryptValue } from '../services/secure-store'
+import {
+  applyAllDevicePolicies,
+  dailyCapPerDevice,
+  readSendingDefaults,
+  writeSendingDefaults,
+} from '../services/sending-policy'
 import { registerHandler } from './router'
 
 /** Keys whose values must never be returned to the renderer. */
 const SECRET_KEY = /key|token|secret|password/i
 
-const SENDING_DEFAULTS = {
-  'sending.delayFrom': 0,
-  'sending.delayTo': 5,
-  'sending.sleepDuration': 10,
-  'sending.sleepAfter': 10,
-  'sending.groupMessageDelay': 2,
-  'sending.groupCreateDelay': 2,
-  'sending.dailyCapPerDevice': 0,
-  'sending.retryAttempts': 2,
-  'sending.maxConcurrentDevices': 20,
-} as const
-
-async function readNumber(key: keyof typeof SENDING_DEFAULTS): Promise<number> {
-  const row = await getPrisma().setting.findUnique({ where: { key } })
-  const parsed = row ? Number(row.value) : NaN
-  return Number.isFinite(parsed) ? parsed : SENDING_DEFAULTS[key]
-}
-
-/**
- * The configured per-device daily send cap, or 0 for unlimited.
- *
- * Exported because the campaign engine has to push this into the wa-service
- * throttle. It previously read nowhere: the setting was saved and shown in the
- * UI, and the throttle supported a `dailyCap`, but nothing ever carried the
- * value between them — so the cap silently did nothing at all.
- */
-export async function dailyCapPerDevice(): Promise<number> {
-  return readNumber('sending.dailyCapPerDevice')
-}
+/** Re-exported for existing callers; the policy itself lives in sending-policy.ts. */
+export { dailyCapPerDevice }
 
 export function registerSettingsHandlers(): void {
   registerHandler('settings:get', async ({ key }) => {
@@ -85,47 +64,24 @@ export function registerSettingsHandlers(): void {
     }
   })
 
-  registerHandler('settings:getSendingDefaults', async () => ({
-    delayFrom: await readNumber('sending.delayFrom'),
-    delayTo: await readNumber('sending.delayTo'),
-    sleepDuration: await readNumber('sending.sleepDuration'),
-    sleepAfter: await readNumber('sending.sleepAfter'),
-    groupMessageDelay: await readNumber('sending.groupMessageDelay'),
-    groupCreateDelay: await readNumber('sending.groupCreateDelay'),
-    dailyCapPerDevice: await readNumber('sending.dailyCapPerDevice'),
-    retryAttempts: await readNumber('sending.retryAttempts'),
-    maxConcurrentDevices: await readNumber('sending.maxConcurrentDevices'),
-  }))
+  registerHandler('settings:getSendingDefaults', () => readSendingDefaults())
 
-  registerHandler('settings:setSendingDefaults', async (input) => {
+  registerHandler('settings:setSendingDefaults', async (patch) => {
+    const input = { ...(await readSendingDefaults()), ...patch }
     if (input.delayFrom > input.delayTo) {
       throw new AppError('VALIDATION_FAILED', {
         userMessage: 'The delay range starts after it ends — swap the two values.',
       })
     }
-
-    const entries: Array<[keyof typeof SENDING_DEFAULTS, number]> = [
-      ['sending.delayFrom', input.delayFrom],
-      ['sending.delayTo', input.delayTo],
-      ['sending.sleepDuration', input.sleepDuration],
-      ['sending.sleepAfter', input.sleepAfter],
-      ['sending.groupMessageDelay', input.groupMessageDelay],
-      ['sending.groupCreateDelay', input.groupCreateDelay],
-      ['sending.dailyCapPerDevice', input.dailyCapPerDevice],
-      ['sending.retryAttempts', input.retryAttempts],
-      ['sending.maxConcurrentDevices', input.maxConcurrentDevices],
-    ]
-
-    await getPrisma().$transaction(
-      entries.map(([key, value]) =>
-        getPrisma().setting.upsert({
-          where: { key },
-          create: { key, value: String(value), isEncrypted: false },
-          update: { value: String(value) },
-        }),
-      ),
-    )
-
+    if (input.quietHoursEnabled && input.quietHoursStart === input.quietHoursEnd) {
+      throw new AppError('VALIDATION_FAILED', {
+        userMessage:
+          'Quiet hours start and end at the same time — pick two different times.',
+      })
+    }
+    await writeSendingDefaults(input)
+    // Every device's throttle picks up the change now, not at the next campaign.
+    await applyAllDevicePolicies()
     return input
   })
 }

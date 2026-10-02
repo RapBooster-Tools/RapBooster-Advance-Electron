@@ -31,6 +31,28 @@ const baileys = JSON.parse(
   readFileSync(join(root, 'node_modules/baileys/package.json'), 'utf8'),
 )
 
+/** A quarter-second 16-bit mono WAV ramp, so the waveform probe needs no fixture. */
+function testWav() {
+  const rate = 8000
+  const n = 2000
+  const b = Buffer.alloc(44 + n * 2)
+  b.write('RIFF', 0)
+  b.writeUInt32LE(36 + n * 2, 4)
+  b.write('WAVEfmt ', 8)
+  b.writeUInt32LE(16, 16)
+  b.writeUInt16LE(1, 20)
+  b.writeUInt16LE(1, 22)
+  b.writeUInt32LE(rate, 24)
+  b.writeUInt32LE(rate * 2, 28)
+  b.writeUInt16LE(2, 32)
+  b.writeUInt16LE(16, 34)
+  b.write('data', 36)
+  b.writeUInt32LE(n * 2, 40)
+  for (let i = 0; i < n; i++)
+    b.writeInt16LE(Math.round(Math.sin(i / 8) * 12000 * (i / n)), 44 + i * 2)
+  return b
+}
+
 /**
  * Every optional peer Baileys declares, and our decision on each.
  *
@@ -50,8 +72,9 @@ const TRIAGE = {
     why: "Baileys 7.0.0-rc13 gates its jimp branch on `typeof lib.jimp?.Jimp === 'object'` but jimp@1.6.1 exports a function, so the branch is unreachable. sharp covers this path. See D56.",
   },
   'audio-decode': {
-    required: false,
-    why: 'Only used for audio waveform and duration. This app sends image and video only — asserted below against shared/types.ts.',
+    required: true,
+    major: 2, // Baileys declares ^2.1.3; 3.x changed the export Baileys imports
+    why: 'Computes the waveform Baileys attaches to every voice note (D91). Voice templates and inbox voice notes (D89) need it; without it Baileys swallows the import failure and voice notes arrive with a flat, empty waveform.',
   },
   'link-preview-js': {
     required: true,
@@ -128,29 +151,18 @@ for (const [name, rule] of Object.entries(TRIAGE)) {
   }
 }
 
-// 4. The audio-decode reasoning depends on us never sending audio. Assert that
-//    rather than trusting the comment — if someone adds 'audio' to the media
-//    enum, this forces the peer to be re-triaged instead of silently shipping
-//    audio messages with no waveform or duration.
+// 4. Voice notes need audio-decode. If the media enum carries audio, the peer
+//    must be triaged as required — never silently optional again.
 const types = readFileSync(join(root, 'shared/types.ts'), 'utf8')
 const mediaEnum = types.match(/export const mediaType = z\.enum\(\[([^\]]*)\]\)/)
 if (!mediaEnum) {
   fail(
     'Could not find the mediaType enum in shared/types.ts — the audio-decode triage cannot be verified.',
   )
-} else {
-  const values = mediaEnum[1]
-    .split(',')
-    .map((v) => v.trim().replace(/['"]/g, ''))
-    .filter(Boolean)
-  const unexpected = values.filter((v) => !['image', 'video'].includes(v))
-  if (unexpected.length > 0) {
-    fail(
-      `mediaType now includes ${unexpected.map((v) => `"${v}"`).join(', ')}.\n` +
-        `    The "audio-decode" triage assumed image and video only. Audio messages need it for\n` +
-        `    waveform and duration, and Baileys degrades silently without it. Re-triage.`,
-    )
-  }
+} else if (mediaEnum[1].includes("'audio'") && !TRIAGE['audio-decode'].required) {
+  fail(
+    'mediaType includes "audio" but audio-decode is not required — voice notes would ship without a waveform.',
+  )
 }
 
 // 5. Functional check, through the real Baileys entry point rather than sharp
@@ -179,6 +191,22 @@ if (problems.length === 0) {
     } catch (err) {
       fail(`Baileys cannot generate image thumbnails: ${err.message}`)
     }
+  }
+}
+
+// 6. Voice-note waveform, through Baileys itself.
+if (problems.length === 0) {
+  const { getAudioWaveform } = await import('baileys/lib/Utils/messages-media.js')
+  const silent = { debug() {}, info() {}, warn() {}, trace() {}, error() {} }
+  try {
+    const waveform = await getAudioWaveform(testWav(), silent)
+    if (!waveform || waveform.length !== 64) {
+      fail(
+        `voice-note waveform was ${waveform?.length ?? 'missing'} samples, expected 64`,
+      )
+    }
+  } catch (err) {
+    fail(`Baileys cannot compute a voice-note waveform: ${err.message}`)
   }
 }
 

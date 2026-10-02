@@ -5,22 +5,23 @@
  * place: a campaign scheduled for next week must still be able to send its
  * image after the user has moved or deleted the original file.
  */
-import { copyFileSync, mkdirSync, rmSync, statSync } from 'node:fs'
-import { basename, extname, join } from 'node:path'
+import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { AppError } from '../../../shared/errors'
 import { renderTemplate } from '../../../shared/merge-tags'
 import { decodeButtons, validateButtons } from '../../../shared/template-buttons'
-import type { TemplateButton } from '../../../shared/types'
+import type { MediaType, TemplateButton, TemplateType } from '../../../shared/types'
+import {
+  richPayload,
+  richPayloadByType,
+  type RichPayload,
+} from '../../../shared/rich-message'
+import { assertMediaAllowed } from '../services/media-policy'
 import { getPrisma } from '../db/client'
 import { mediaDir } from '../db/paths'
 import { registerHandler } from './router'
 
 /** WhatsApp's practical limits; larger files are rejected before they are copied. */
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const MAX_VIDEO_BYTES = 16 * 1024 * 1024
-
-const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
-const VIDEO_EXT = new Set(['.mp4', '.3gp', '.mkv'])
 
 function parseJsonArray(value: string | null): string[] | null {
   if (!value) return null
@@ -30,6 +31,18 @@ function parseJsonArray(value: string | null): string[] | null {
       ? parsed.filter((v): v is string => typeof v === 'string')
       : null
   } catch {
+    return null
+  }
+}
+
+/** Template.extra, validated on the way out; a corrupt payload reads as none. */
+function parseExtra(json: string | null): RichPayload | null {
+  if (!json) return null
+  try {
+    const parsed = richPayload.safeParse(JSON.parse(json))
+    return parsed.success ? parsed.data : null
+  } catch (err) {
+    console.warn('template: unreadable extra payload', err)
     return null
   }
 }
@@ -45,14 +58,15 @@ function serialize(row: {
   buttons: string | null
   footer: string | null
   listButtonText: string | null
+  extra: string | null
   createdAt: Date
 }) {
   return {
     id: row.id,
     name: row.name,
-    type: row.type as 'text' | 'media' | 'interactive' | 'button',
+    type: row.type as TemplateType,
     content: row.content,
-    mediaType: (row.mediaType as 'image' | 'video' | null) ?? null,
+    mediaType: (row.mediaType as MediaType | null) ?? null,
     mediaPath: row.mediaPath,
     options: parseJsonArray(row.options),
     // Rows written before buttons were structured hold plain labels; decode
@@ -60,6 +74,7 @@ function serialize(row: {
     buttons: row.buttons ? decodeButtons(row.buttons) : null,
     footer: row.footer,
     listButtonText: row.listButtonText,
+    extra: parseExtra(row.extra),
     createdAt: row.createdAt.toISOString(),
   }
 }
@@ -71,39 +86,61 @@ function serialize(row: {
 function storeMedia(
   templateId: string,
   sourcePath: string,
-  mediaType: 'image' | 'video',
+  mediaType: MediaType,
 ): string {
-  let size: number
-  try {
-    size = statSync(sourcePath).size
-  } catch {
-    throw new AppError('VALIDATION_FAILED', {
-      userMessage: 'That media file could not be read.',
-    })
-  }
-
-  const ext = extname(sourcePath).toLowerCase()
-  const allowed = mediaType === 'image' ? IMAGE_EXT : VIDEO_EXT
-  if (!allowed.has(ext)) {
-    throw new AppError('VALIDATION_FAILED', {
-      userMessage: `${ext || 'That file type'} is not supported for ${mediaType} messages.`,
-    })
-  }
-
-  const limit = mediaType === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES
-  if (size > limit) {
-    throw new AppError('VALIDATION_FAILED', {
-      userMessage: `That file is ${(size / 1024 / 1024).toFixed(1)} MB. WhatsApp accepts up to ${
-        limit / 1024 / 1024
-      } MB for ${mediaType}s.`,
-    })
-  }
-
+  assertMediaAllowed(sourcePath, mediaType)
   const dir = mediaDir('templates', templateId)
   mkdirSync(dir, { recursive: true })
   const target = join(dir, basename(sourcePath))
   copyFileSync(sourcePath, target)
   return target
+}
+
+/** Types whose payload lives in `extra`, and the schema it must satisfy. */
+const PAYLOAD_TYPES = new Set(Object.keys(richPayloadByType))
+/** Types sent as a file with no text of their own. */
+const FILE_TYPES: Partial<Record<TemplateType, MediaType>> = {
+  voice: 'audio',
+  sticker: 'sticker',
+}
+
+/**
+ * Per-type rules the zod contract cannot express on its own. Returns the
+ * validated payload to store, or null for types that carry none.
+ */
+function checkRich(
+  type: TemplateType,
+  content: string,
+  extra: RichPayload | undefined,
+  hasMedia: boolean,
+): RichPayload | null {
+  if (!FILE_TYPES[type] && content.trim() === '') {
+    throw new AppError('VALIDATION_FAILED', {
+      userMessage:
+        type === 'poll'
+          ? 'Write the poll question.'
+          : type === 'event'
+            ? 'Give the event a name.'
+            : 'Template content is required.',
+    })
+  }
+  if (FILE_TYPES[type] && !hasMedia) {
+    throw new AppError('VALIDATION_FAILED', {
+      userMessage:
+        type === 'voice'
+          ? 'Choose an audio file for the voice note.'
+          : 'Choose a .webp sticker.',
+    })
+  }
+  if (!PAYLOAD_TYPES.has(type)) return null
+  const schema = richPayloadByType[type as keyof typeof richPayloadByType]
+  const parsed = schema.safeParse(extra)
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_FAILED', {
+      userMessage: parsed.error.issues[0]?.message ?? `Complete the ${type} details.`,
+    })
+  }
+  return parsed.data
 }
 
 function checkButtons(
@@ -153,13 +190,23 @@ export function registerTemplateHandlers(): void {
         userMessage: 'Choose an image or video for a media template.',
       })
     }
+    const extra = checkRich(
+      input.type,
+      input.content,
+      input.extra,
+      Boolean(input.mediaSourcePath),
+    )
+    // Voice and sticker templates are files of a fixed kind; the renderer need
+    // not send a mediaType for them.
+    const mediaType = FILE_TYPES[input.type] ?? input.mediaType
 
     const created = await getPrisma().template.create({
       data: {
         name,
         type: input.type,
         content: input.content,
-        mediaType: input.mediaType ?? null,
+        extra: extra ? JSON.stringify(extra) : null,
+        mediaType: mediaType ?? null,
         options: options ? JSON.stringify(options) : null,
         buttons: buttons ? JSON.stringify(buttons) : null,
         footer: input.footer?.trim() || null,
@@ -167,9 +214,9 @@ export function registerTemplateHandlers(): void {
       },
     })
 
-    if (input.mediaSourcePath && input.mediaType) {
+    if (input.mediaSourcePath && mediaType) {
       try {
-        const mediaPath = storeMedia(created.id, input.mediaSourcePath, input.mediaType)
+        const mediaPath = storeMedia(created.id, input.mediaSourcePath, mediaType)
         const withMedia = await getPrisma().template.update({
           where: { id: created.id },
           data: { mediaPath },
@@ -191,13 +238,23 @@ export function registerTemplateHandlers(): void {
     const buttons = checkButtons(input.buttons)
     const options = input.options?.map((o) => o.trim()).filter((o) => o !== '')
 
+    const type = existing.type as TemplateType
+    // Re-validate against the merged state: an update may change the content
+    // or the payload, never leave a poll without options.
+    const extra =
+      input.content !== undefined || input.extra !== undefined
+        ? checkRich(
+            type,
+            input.content ?? existing.content,
+            input.extra ?? parseExtra(existing.extra) ?? undefined,
+            Boolean(input.mediaSourcePath ?? existing.mediaPath),
+          )
+        : undefined
+
+    const mediaType = FILE_TYPES[type] ?? input.mediaType ?? existing.mediaType
     let mediaPath = existing.mediaPath
-    if (input.mediaSourcePath && (input.mediaType ?? existing.mediaType)) {
-      mediaPath = storeMedia(
-        existing.id,
-        input.mediaSourcePath,
-        (input.mediaType ?? existing.mediaType) as 'image' | 'video',
-      )
+    if (input.mediaSourcePath && mediaType) {
+      mediaPath = storeMedia(existing.id, input.mediaSourcePath, mediaType as MediaType)
     }
 
     const updated = await getPrisma().template.update({
@@ -205,6 +262,7 @@ export function registerTemplateHandlers(): void {
       data: {
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
         ...(input.content !== undefined ? { content: input.content } : {}),
+        ...(extra !== undefined ? { extra: extra ? JSON.stringify(extra) : null } : {}),
         ...(input.mediaType !== undefined ? { mediaType: input.mediaType } : {}),
         ...(mediaPath !== existing.mediaPath ? { mediaPath } : {}),
         ...(options ? { options: JSON.stringify(options) } : {}),

@@ -26,11 +26,32 @@ import { registerLicenseHandlers } from './ipc/license.ipc'
 import { registerSettingsHandlers } from './ipc/settings.ipc'
 import { registerSystemHandlers } from './ipc/system.ipc'
 import { registerTemplateHandlers } from './ipc/template.ipc'
+import { registerAudienceHandlers } from './ipc/audience.ipc'
+import { registerGroupToolHandlers } from './ipc/group-tools.ipc'
+import { registerBroadcastHandlers } from './ipc/broadcast.ipc'
+import { registerAutomationHandlers } from './ipc/automation.ipc'
+import { registerSequenceHandlers } from './ipc/sequence.ipc'
+import { registerAiHandlers } from './ipc/ai.ipc'
+import { registerDeviceExtraHandlers } from './ipc/device-extra.ipc'
+import { handleInbound } from './services/inbound'
+import { recordReceipt } from './services/attribution'
+import { handleIncomingCall } from './services/calls'
+import {
+  handleLabel,
+  handleLabelAssociation,
+  refreshBusinessStatus,
+} from './services/labels'
+import { applyAllDevicePolicies, applyDevicePolicy } from './services/sending-policy'
+import { registerJob, startScheduler, stopScheduler } from './services/scheduler'
+import { sequenceTick } from './services/sequences'
+import { webhookTick } from './services/webhooks'
+import { warmupTick } from './services/warmup'
+import { postTick } from './services/post-scheduler'
+import { heldDraftTick } from './services/ai/drafts'
 import { emitToAll } from './ipc/router'
 import { waBridge } from './wa-bridge'
 import { campaignEngine } from './services/campaign-engine'
 import { groupRunner } from './services/group-runner'
-import { maybeReply } from './services/ai/responder'
 import { getPrisma } from './db/client'
 import { setLicenseGate, unregisteredChannels } from './ipc/router'
 import {
@@ -148,6 +169,8 @@ function startWaService(): void {
   // that has not been re-opened yet.
   waBridge.setRecoveryHook(async () => {
     await recoverDeviceSessions()
+    // A restarted wa-service has a fresh throttle with no cap or quiet hours.
+    await applyAllDevicePolicies()
     const { requeued, resumed } = await campaignEngine.recover()
     if (requeued > 0 || resumed.length > 0) {
       console.log(
@@ -193,6 +216,17 @@ function startWaService(): void {
       phone: phone ?? null,
       error: error ?? null,
     })
+
+    // Every device gets the base sending policy the moment it can send, so no
+    // automated sender ever runs on the throttle's built-in defaults.
+    if (status === 'connected') {
+      void applyDevicePolicy(deviceId).catch((err: unknown) =>
+        console.error(`could not apply sending policy to ${deviceId}`, err),
+      )
+      void refreshBusinessStatus(deviceId).catch((err: unknown) =>
+        console.error(`could not read business status for ${deviceId}`, err),
+      )
+    }
 
     // A device that drops mid-campaign would otherwise strand its slice of the
     // queue until it came back, and the campaign would look stalled.
@@ -245,32 +279,26 @@ function startWaService(): void {
         if (!saved) return
         emitToAll(windows(), 'message:received', { chatId: saved.chatId, message: saved })
 
-        // Auto-reply runs after the message is stored and shown, so the user
-        // sees the inbound message immediately rather than after the model.
-        void maybeReply(deviceId, saved.chatId, {
-          id: saved.id,
-          body: saved.body,
+        // Everything else — opt-outs, attribution, rules, the bot — runs after
+        // the message is stored and shown, so the user sees it immediately.
+        return handleInbound({
+          deviceId,
+          chatId: saved.chatId,
+          phone: message.from,
           isGroup: message.isGroup,
+          messageId: saved.id,
+          type: saved.type,
+          text: saved.body,
+          at: new Date(saved.timestamp),
         })
-          .then((outcome) => {
-            if (outcome.kind === 'failed') {
-              // Never a silent no-op: the user configured auto-reply, and if it
-              // is not happening they need to know exactly why.
-              console.error(`auto-reply failed [${outcome.code}] ${outcome.message}`)
-              emitToAll(windows(), 'toast', { level: 'error', message: outcome.message })
-            } else if (outcome.kind === 'escalated') {
-              emitToAll(windows(), 'toast', {
-                level: 'warning',
-                message: 'A conversation was escalated for a human reply.',
-              })
-            }
-          })
-          .catch((err) => console.error('auto-reply threw', err))
       })
-      .catch((err: unknown) => console.error('could not persist incoming message', err))
+      .catch((err: unknown) => console.error('could not handle incoming message', err))
   })
 
   waBridge.on('receipt', ({ messageId, status }) => {
+    void recordReceipt(messageId, status).catch((err: unknown) =>
+      console.error('could not record campaign receipt', err),
+    )
     void getPrisma()
       .message.update({ where: { id: messageId }, data: { status } })
       .then(() => emitToAll(windows(), 'message:status', { messageId, status }))
@@ -278,6 +306,24 @@ function startWaService(): void {
         // A receipt for a message we never stored (sent before this install,
         // or from another linked device) is not an error.
       })
+  })
+
+  waBridge.on('call', ({ deviceId, ...call }) => {
+    void handleIncomingCall(deviceId, call).catch((err: unknown) =>
+      console.error('could not handle incoming call', err),
+    )
+  })
+
+  waBridge.on('label', ({ deviceId, ...label }) => {
+    void handleLabel(deviceId, label).catch((err: unknown) =>
+      console.error('could not mirror a business label', err),
+    )
+  })
+
+  waBridge.on('labelAssociation', ({ deviceId, ...association }) => {
+    void handleLabelAssociation(deviceId, association).catch((err: unknown) =>
+      console.error('could not mirror a label association', err),
+    )
   })
 
   waBridge.on('log', ({ level, message }) => {
@@ -288,19 +334,20 @@ function startWaService(): void {
 
   waBridge.start()
 
-  // Scheduler tick. One minute is enough granularity for a datetime-local
-  // field, and comparing against the wall clock means a machine that slept
-  // through a scheduled time still fires on wake.
-  setInterval(() => {
-    void campaignEngine
-      .runScheduled()
-      .then((started) => {
-        if (started.length > 0) {
-          console.log(`scheduler: started ${started.length} campaign(s)`)
-        }
-      })
-      .catch((err: unknown) => console.error('scheduler tick failed', err))
-  }, 60_000)
+  // One clock for every time-driven job (services/scheduler.ts). One minute is
+  // enough granularity for a datetime-local field, and every job compares
+  // against the wall clock, so a machine that slept still catches up on wake.
+  registerJob('campaigns', async () => {
+    const started = await campaignEngine.runScheduled()
+    if (started.length > 0)
+      console.log(`scheduler: started ${started.length} campaign(s)`)
+  })
+  registerJob('sequences', sequenceTick)
+  registerJob('posts', postTick)
+  registerJob('webhooks', webhookTick)
+  registerJob('warmup', warmupTick)
+  registerJob('held AI replies', heldDraftTick)
+  startScheduler()
 }
 
 async function bootUi(): Promise<void> {
@@ -365,6 +412,13 @@ async function bootUi(): Promise<void> {
   registerChatHandlers()
   registerChatbotHandlers()
   registerSettingsHandlers()
+  registerAudienceHandlers()
+  registerGroupToolHandlers()
+  registerBroadcastHandlers()
+  registerAutomationHandlers()
+  registerSequenceHandlers()
+  registerAiHandlers()
+  registerDeviceExtraHandlers()
 
   startWaService()
   const pending = unregisteredChannels()
@@ -412,7 +466,9 @@ async function bootUi(): Promise<void> {
   // into the database so the next launch starts clean.
   app.on('before-quit', () => {
     // Close sockets before releasing the database, so nothing tries to persist
-    // after the client is gone.
+    // after the client is gone. The scheduler stops first so no job starts
+    // writing mid-shutdown.
+    stopScheduler()
     void campaignEngine
       .shutdown()
       .then(() => waBridge.stop())

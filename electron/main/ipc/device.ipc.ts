@@ -14,21 +14,25 @@ import { getPrisma } from '../db/client'
 import { sessionsDir } from '../db/paths'
 import { waBridge } from '../wa-bridge'
 import { registerHandler } from './router'
+import {
+  dailyCapPerDevice,
+  effectiveCap,
+  isStaleDay,
+  warmupDay,
+} from '../services/sending-policy'
 
 function authDirFor(deviceId: string): string {
   return join(sessionsDir(), deviceId)
 }
 
-function serialize(row: {
-  id: string
-  name: string
-  phone: string | null
-  status: string
-  lastActiveAt: Date | null
-  lastError: string | null
-  dailySentCount: number
-  createdAt: Date
-}) {
+type DeviceRow = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getPrisma>['device']['findUnique']>>
+>
+
+/** `globalCap` is the configured daily cap (0 = unlimited), read once per call. */
+export function serializeDevice(row: DeviceRow, globalCap: number) {
+  const cap = effectiveCap(globalCap, row)
+  const paused = row.healthPausedUntil && row.healthPausedUntil > new Date()
   return {
     id: row.id,
     name: row.name,
@@ -36,8 +40,14 @@ function serialize(row: {
     status: row.status as DeviceStatus,
     lastActiveAt: row.lastActiveAt?.toISOString() ?? null,
     lastError: row.lastError,
-    dailySentCount: row.dailySentCount,
+    dailySentCount: isStaleDay(row.dailyCountResetAt) ? 0 : row.dailySentCount,
     createdAt: row.createdAt.toISOString(),
+    warmupEnabled: row.warmupEnabled,
+    warmupDay: warmupDay(row),
+    effectiveCap: cap === 0 ? null : cap,
+    healthPausedUntil: paused ? row.healthPausedUntil!.toISOString() : null,
+    healthReason: paused ? row.healthReason : null,
+    isBusiness: row.isBusiness,
   }
 }
 
@@ -51,7 +61,8 @@ async function requireDevice(id: string) {
 export function registerDeviceHandlers(): void {
   registerHandler('device:list', async () => {
     const rows = await getPrisma().device.findMany({ orderBy: { createdAt: 'asc' } })
-    return rows.map(serialize)
+    const cap = await dailyCapPerDevice()
+    return rows.map((row) => serializeDevice(row, cap))
   })
 
   registerHandler('device:create', async ({ name }) => {
@@ -70,12 +81,13 @@ export function registerDeviceHandlers(): void {
       where: { id: device.id },
       data: { authFolder: device.id },
     })
-    return serialize(updated)
+    return serializeDevice(updated, await dailyCapPerDevice())
   })
 
   registerHandler('device:rename', async ({ id, name }) => {
     await requireDevice(id)
-    return serialize(await getPrisma().device.update({ where: { id }, data: { name } }))
+    const renamed = await getPrisma().device.update({ where: { id }, data: { name } })
+    return serializeDevice(renamed, await dailyCapPerDevice())
   })
 
   registerHandler('device:connect', async ({ id }) => {

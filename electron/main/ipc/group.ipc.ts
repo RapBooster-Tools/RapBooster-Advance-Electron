@@ -3,20 +3,42 @@ import { getPrisma } from '../db/client'
 import { groupRunner } from '../services/group-runner'
 import { registerHandler } from './router'
 
+export function serializeGroup(g: {
+  id: string
+  deviceId: string
+  name: string
+  memberCount: number
+  isAdmin: boolean
+  isCommunity: boolean
+  parentId: string | null
+  announce: boolean
+  restrict: boolean
+  joinApproval: boolean
+  syncedAt: Date
+}) {
+  return {
+    id: g.id,
+    deviceId: g.deviceId,
+    name: g.name,
+    memberCount: g.memberCount,
+    isAdmin: g.isAdmin,
+    isCommunity: g.isCommunity,
+    parentId: g.parentId,
+    announce: g.announce,
+    restrict: g.restrict,
+    joinApproval: g.joinApproval,
+    syncedAt: g.syncedAt.toISOString(),
+  }
+}
+
 export function registerGroupHandlers(): void {
   registerHandler('group:list', async ({ deviceId }) => {
     const rows = await getPrisma().group.findMany({
-      where: deviceId ? { deviceId } : {},
+      // Communities are listed by community:list, not mixed in with groups.
+      where: { ...(deviceId ? { deviceId } : {}), isCommunity: false },
       orderBy: { name: 'asc' },
     })
-    return rows.map((g) => ({
-      id: g.id,
-      deviceId: g.deviceId,
-      name: g.name,
-      memberCount: g.memberCount,
-      isAdmin: g.isAdmin,
-      syncedAt: g.syncedAt.toISOString(),
-    }))
+    return rows.map(serializeGroup)
   })
 
   registerHandler('group:sync', async ({ deviceId }) => ({

@@ -6,7 +6,7 @@ import type {
   IpcChannel,
   IpcEvent,
   IpcEventPayload,
-  IpcRequest,
+  IpcRequestInput,
   IpcResponse,
 } from '@shared/ipc'
 
@@ -17,7 +17,7 @@ import type {
  */
 export function useIpcInvoke() {
   return useCallback(
-    async <C extends IpcChannel>(channel: C, request?: IpcRequest<C>) =>
+    async <C extends IpcChannel>(channel: C, request?: IpcRequestInput<C>) =>
       window.api.invoke(channel, request),
     [],
   )
@@ -50,7 +50,7 @@ interface Settled<T> {
  */
 export function useIpcQuery<C extends IpcChannel>(
   channel: C,
-  request?: IpcRequest<C>,
+  request?: IpcRequestInput<C>,
   options: { enabled?: boolean } = {},
 ): QueryState<IpcResponse<C>> {
   const { enabled = true } = options

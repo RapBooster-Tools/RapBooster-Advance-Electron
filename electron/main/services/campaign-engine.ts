@@ -17,26 +17,26 @@
 import Database from 'better-sqlite3'
 import { getPrisma } from '../db/client'
 import { databasePath } from '../db/paths'
+import { inQuietHours } from '../../../shared/quiet-hours'
 import { buildTemplateMessage } from './template-message'
 import { waBridge } from '../wa-bridge'
-import { dailyCapPerDevice } from '../ipc/settings.ipc'
+import { notify, toast } from './notify'
+import { suppressedPhones } from './optout'
+import {
+  applyDevicePolicy,
+  effectiveCap,
+  isParkingError,
+  isStaleDay,
+  quietWindow,
+  readSendingDefaults,
+} from './sending-policy'
+import { emitWebhook } from './webhooks'
 
 export interface CampaignCounters {
   total: number
   sent: number
   failed: number
   pending: number
-}
-
-/** True when a stored daily counter belongs to an earlier local day. */
-function isStale(resetAt: Date | null): boolean {
-  if (!resetAt) return true
-  const now = new Date()
-  return (
-    resetAt.getFullYear() !== now.getFullYear() ||
-    resetAt.getMonth() !== now.getMonth() ||
-    resetAt.getDate() !== now.getDate()
-  )
 }
 
 /**
@@ -49,7 +49,7 @@ async function bumpDailyCount(deviceId: string): Promise<void> {
   const device = await prisma.device.findUnique({ where: { id: deviceId } })
   if (!device) return
 
-  if (isStale(device.dailyCountResetAt)) {
+  if (isStaleDay(device.dailyCountResetAt)) {
     await prisma.device.update({
       where: { id: deviceId },
       data: { dailySentCount: 1, dailyCountResetAt: new Date() },
@@ -60,11 +60,6 @@ async function bumpDailyCount(deviceId: string): Promise<void> {
     where: { id: deviceId },
     data: { dailySentCount: { increment: 1 } },
   })
-}
-
-/** True for the throttle's `DailyCapReachedError`, which crosses the bridge as text. */
-function isDailyCapError(message: string): boolean {
-  return message.includes('daily cap')
 }
 
 /** Retryable failures are transient; terminal ones will fail identically forever. */
@@ -137,8 +132,117 @@ export async function counters(campaignId: string): Promise<CampaignCounters> {
 
 type ProgressListener = (campaignId: string, counters: CampaignCounters) => void
 
+/**
+ * Device health breaker (D89).
+ *
+ * WhatsApp rarely announces a restriction; it shows up as sends that start
+ * failing. A device whose recent sends fail at a ban-like rate is paused for an
+ * hour rather than allowed to keep hammering — continuing is the surest way to
+ * turn a temporary restriction into a permanent ban.
+ *
+ * Recipient-shaped failures ("not on WhatsApp", "invalid number") say nothing
+ * about the account and are not counted.
+ */
+const HEALTH_WINDOW = 20
+const HEALTH_MIN_SAMPLES = 10
+const HEALTH_FAIL_RATIO = 0.5
+const HEALTH_BLOCK_LIMIT = 3
+const HEALTH_PAUSE_MS = 60 * 60_000
+
+const RECIPIENT_FAILURE = /not on whatsapp|invalid number/i
+const ACCOUNT_BLOCK = /blocked|forbidden|not-authorized|rate-overlimit|\b429\b/i
+
+class HealthMonitor {
+  private readonly outcomes = new Map<string, Array<{ ok: boolean; blocked: boolean }>>()
+
+  /** Record a send outcome; returns a reason when the device should pause. */
+  record(deviceId: string, ok: boolean, error?: string): string | null {
+    if (!ok && error && RECIPIENT_FAILURE.test(error)) return null
+    const list = this.outcomes.get(deviceId) ?? []
+    list.push({ ok, blocked: !ok && Boolean(error && ACCOUNT_BLOCK.test(error)) })
+    if (list.length > HEALTH_WINDOW) list.shift()
+    this.outcomes.set(deviceId, list)
+
+    const blocked = list.filter((o) => o.blocked).length
+    if (blocked >= HEALTH_BLOCK_LIMIT) {
+      return `${blocked} recent sends were refused as blocked or unauthorized`
+    }
+    const failed = list.filter((o) => !o.ok).length
+    if (list.length >= HEALTH_MIN_SAMPLES && failed / list.length >= HEALTH_FAIL_RATIO) {
+      return `${failed} of the last ${list.length} sends failed`
+    }
+    return null
+  }
+
+  reset(deviceId: string): void {
+    this.outcomes.delete(deviceId)
+  }
+}
+
+/**
+ * Global cap on how many devices send at once (sending.maxConcurrentDevices).
+ * A device already sending for one campaign takes no extra slot for another —
+ * its throttle serializes them anyway.
+ */
+class DeviceSlots {
+  private readonly active = new Map<string, number>()
+  private waiters: Array<() => void> = []
+
+  async acquire(deviceId: string, signal: AbortSignal): Promise<boolean> {
+    for (;;) {
+      if (signal.aborted) return false
+      const { maxConcurrentDevices } = await readSendingDefaults()
+      if (this.active.has(deviceId) || this.active.size < maxConcurrentDevices) {
+        this.active.set(deviceId, (this.active.get(deviceId) ?? 0) + 1)
+        return true
+      }
+      await new Promise<void>((resolve) => {
+        this.waiters.push(resolve)
+        signal.addEventListener('abort', () => resolve(), { once: true })
+      })
+    }
+  }
+
+  release(deviceId: string): void {
+    const count = (this.active.get(deviceId) ?? 1) - 1
+    if (count <= 0) this.active.delete(deviceId)
+    else this.active.set(deviceId, count)
+    const woken = this.waiters
+    this.waiters = []
+    for (const wake of woken) wake()
+  }
+}
+
+/** Contact fields as merge-tag values. */
+function mergeValues(contact: {
+  data: string
+  name: string
+  phone: string
+}): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(contact.data)
+    if (parsed && typeof parsed === 'object') {
+      return Object.fromEntries(
+        Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [
+          k,
+          String(v ?? ''),
+        ]),
+      )
+    }
+  } catch (err) {
+    // Corrupt JSON in one row must not stop a campaign; the promoted columns
+    // still carry the two fields every template uses.
+    console.debug('campaign: unreadable contact data, using name and phone', err)
+  }
+  return { Name: contact.name, Mobile: contact.phone }
+}
+
+const VERIFY_BATCH = 50
+
 export class CampaignEngine {
   private readonly running = new Map<string, AbortController>()
+  private readonly health = new HealthMonitor()
+  private readonly slots = new DeviceSlots()
   private progress: ProgressListener | undefined
 
   onProgress(listener: ProgressListener): void {
@@ -150,20 +254,27 @@ export class CampaignEngine {
   }
 
   /**
-   * Expand a campaign's lists into queue rows.
+   * Expand a campaign's audience into queue rows.
+   *
+   * Audience = contacts in the selected lists ∪ contacts carrying an included
+   * tag, minus contacts carrying an excluded tag (D89).
    *
    * Batched and de-duplicated by phone number. The same person imported into
    * two selected lists is two `Contact` rows with different ids, so the
    * unique(campaignId, contactId) constraint does not catch it — and messaging
    * one number twice in a single campaign is exactly what gets accounts
-   * reported. The first list the number appears in wins.
+   * reported. The first contact the number appears on wins.
+   *
+   * Numbers on the opt-out list — and, when the campaign checks numbers, ones
+   * already known not to be on WhatsApp — are queued as `skipped` with the
+   * reason, so the report shows why they were not messaged.
    */
   async expand(campaignId: string): Promise<number> {
     const prisma = getPrisma()
 
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
-      include: { devices: true, lists: true },
+      include: { devices: true, lists: true, tags: true },
     })
     if (!campaign) throw new Error(`campaign ${campaignId} not found`)
 
@@ -174,6 +285,21 @@ export class CampaignEngine {
     if (existing > 0) return existing
 
     const listIds = campaign.lists.map((l) => l.listId)
+    const include = campaign.tags.filter((t) => t.mode === 'include').map((t) => t.tagId)
+    const exclude = campaign.tags.filter((t) => t.mode === 'exclude').map((t) => t.tagId)
+    const sources = [
+      ...(listIds.length > 0 ? [{ listId: { in: listIds } }] : []),
+      ...(include.length > 0 ? [{ tags: { some: { tagId: { in: include } } } }] : []),
+    ]
+    if (sources.length === 0) return 0
+    const where = {
+      isValid: true,
+      OR: sources,
+      ...(exclude.length > 0
+        ? { NOT: { tags: { some: { tagId: { in: exclude } } } } }
+        : {}),
+    }
+
     let created = 0
     let cursor: string | undefined
     let index = 0
@@ -183,7 +309,7 @@ export class CampaignEngine {
 
     for (;;) {
       const contacts = await prisma.contact.findMany({
-        where: { listId: { in: listIds }, isValid: true },
+        where,
         orderBy: { id: 'asc' },
         take: 1_000,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -195,15 +321,24 @@ export class CampaignEngine {
         seenPhones.add(contact.phone)
         return true
       })
+      const suppressed = await suppressedPhones(fresh.map((c) => c.phone))
 
       // Round-robin across devices so no single account carries the run.
       // Assigned after de-duplication so dropped rows do not skew the split.
-      const rows = fresh.map((contact) => ({
-        campaignId,
-        contactId: contact.id,
-        deviceId: deviceIds[index++ % deviceIds.length]!,
-        phone: contact.phone,
-      }))
+      const rows = fresh.map((contact) => {
+        const skipReason = suppressed.has(contact.phone)
+          ? 'Opted out'
+          : campaign.checkNumbers && contact.waStatus === 'invalid'
+            ? 'Not on WhatsApp'
+            : null
+        return {
+          campaignId,
+          contactId: contact.id,
+          deviceId: deviceIds[index++ % deviceIds.length]!,
+          phone: contact.phone,
+          ...(skipReason ? { status: 'skipped', error: skipReason } : {}),
+        }
+      })
 
       if (rows.length > 0) {
         const result = await prisma.campaignRecipient.createMany({ data: rows })
@@ -217,62 +352,6 @@ export class CampaignEngine {
       data: { totalCount: created },
     })
     return created
-  }
-
-  /**
-   * Seed the throttle with today's count for a device, rolling the day over
-   * first.
-   *
-   * WHY the rollover lives here: `Device.dailySentCount` is a running total,
-   * and nothing ever reset it — `dailyCountResetAt` existed in the schema but
-   * was never read or written. So the value handed to `throttle.seed()` was the
-   * device's *lifetime* total, and `seed()` writes it straight into `sentToday`
-   * with no day check. Once a device's all-time total passed the configured
-   * daily cap it could never send again: every campaign start reseeded a count
-   * already over the limit, and the very first cap check threw. The daily cap
-   * is an anti-ban feature, so the failure mode was that turning on protection
-   * eventually bricked sending altogether.
-   */
-  /** Send one device's pacing to wa-service, with today's count rolled over. */
-  private async configureThrottle(
-    campaign: {
-      delayFrom: number
-      delayTo: number
-      sleepDuration: number
-      sleepAfter: number
-    },
-    deviceId: string,
-  ): Promise<void> {
-    const sentToday = await this.seedDailyCount(deviceId)
-    // The cap is a global sending policy, not a per-campaign field, and it has
-    // to be sent explicitly — the throttle defaults to 0 (unlimited).
-    const dailyCap = await dailyCapPerDevice()
-    await waBridge
-      .request('throttle:configure', {
-        deviceId,
-        delayFromMs: campaign.delayFrom * 1_000,
-        delayToMs: campaign.delayTo * 1_000,
-        sleepDurationMs: campaign.sleepDuration * 1_000,
-        sleepAfter: campaign.sleepAfter,
-        dailyCap,
-        sentToday,
-      })
-      .catch((err: unknown) => console.error('throttle:configure failed', err))
-  }
-
-  private async seedDailyCount(deviceId: string): Promise<number> {
-    const prisma = getPrisma()
-    const device = await prisma.device.findUnique({ where: { id: deviceId } })
-    if (!device) return 0
-
-    if (isStale(device.dailyCountResetAt)) {
-      await prisma.device.update({
-        where: { id: deviceId },
-        data: { dailySentCount: 0, dailyCountResetAt: new Date() },
-      })
-      return 0
-    }
-    return device.dailySentCount
   }
 
   async start(campaignId: string): Promise<void> {
@@ -308,10 +387,10 @@ export class CampaignEngine {
       data: { status: 'running', startedAt: campaign.startedAt ?? new Date() },
     })
 
-    // Pacing is per device and comes from the campaign, so configure the
-    // scheduler before any worker starts.
+    // Pacing is per device and comes from the campaign, layered on the base
+    // policy (cap, warmup, quiet hours, typing), before any worker starts.
     for (const link of campaign.devices) {
-      await this.configureThrottle(campaign, link.deviceId)
+      await applyDevicePolicy(link.deviceId, campaign)
     }
 
     // One worker per device, running concurrently. Pacing inside wa-service
@@ -334,38 +413,133 @@ export class CampaignEngine {
     retryAttempts: number,
     signal: AbortSignal,
   ): Promise<void> {
+    if (!(await this.slots.acquire(deviceId, signal))) return
+    try {
+      await this.drain(campaignId, deviceId, retryAttempts, signal)
+    } finally {
+      this.slots.release(deviceId)
+    }
+  }
+
+  /** True when the device's health breaker has it paused right now. */
+  private async healthPaused(deviceId: string): Promise<boolean> {
+    const device = await getPrisma().device.findUnique({
+      where: { id: deviceId },
+      select: { healthPausedUntil: true },
+    })
+    return Boolean(device?.healthPausedUntil && device.healthPausedUntil > new Date())
+  }
+
+  private async tripHealth(deviceId: string, reason: string): Promise<void> {
+    const { healthBreaker } = await readSendingDefaults()
+    if (!healthBreaker) return
+    const until = new Date(Date.now() + HEALTH_PAUSE_MS)
+    const device = await getPrisma().device.update({
+      where: { id: deviceId },
+      data: { healthPausedUntil: until, healthReason: reason },
+    })
+    this.health.reset(deviceId)
+    console.warn(
+      `health breaker: paused ${deviceId} until ${until.toISOString()} — ${reason}`,
+    )
+    toast(
+      'warning',
+      `Paused "${device.name}" for an hour to protect the account: ${reason}. Its campaigns resume automatically.`,
+    )
+    notify('device:updated', { deviceId })
+  }
+
+  /**
+   * Check the next batch of this device's pending recipients whose number has
+   * never been checked, and skip the ones not on WhatsApp. Done in batches of 50
+   * just ahead of sending, so a large campaign never does one big up-front scan.
+   */
+  private async verifyAhead(campaignId: string, deviceId: string): Promise<void> {
+    const prisma = getPrisma()
+    const batch = await prisma.campaignRecipient.findMany({
+      where: {
+        campaignId,
+        deviceId,
+        status: 'pending',
+        contact: { waStatus: 'unknown' },
+      },
+      select: { id: true, phone: true, contactId: true },
+      orderBy: { id: 'asc' },
+      take: VERIFY_BATCH,
+    })
+    if (batch.length === 0) return
+
+    const { results } = await waBridge.request('number:check', {
+      deviceId,
+      phones: batch.map((r) => r.phone),
+    })
+    const exists = new Map(results.map((r) => [r.phone, r.exists]))
+    const now = new Date()
+    const valid = batch.filter((r) => exists.get(r.phone) === true)
+    const invalid = batch.filter((r) => exists.get(r.phone) === false)
+
+    await prisma.$transaction([
+      prisma.contact.updateMany({
+        where: { id: { in: valid.map((r) => r.contactId) } },
+        data: { waStatus: 'valid', waCheckedAt: now },
+      }),
+      prisma.contact.updateMany({
+        where: { id: { in: invalid.map((r) => r.contactId) } },
+        data: { waStatus: 'invalid', waCheckedAt: now },
+      }),
+      prisma.campaignRecipient.updateMany({
+        where: { id: { in: invalid.map((r) => r.id) }, status: 'pending' },
+        data: { status: 'skipped', error: 'Not on WhatsApp', sentAt: now },
+      }),
+    ])
+  }
+
+  private async drain(
+    campaignId: string,
+    deviceId: string,
+    retryAttempts: number,
+    signal: AbortSignal,
+  ): Promise<void> {
     const prisma = getPrisma()
     let sinceEmit = 0
+    let lastVerify = 0
+
+    if (await this.healthPaused(deviceId)) return
 
     while (!signal.aborted) {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        include: { template: true },
+      })
+      if (!campaign) return
+
+      if (campaign.checkNumbers && Date.now() - lastVerify > 1_000) {
+        lastVerify = Date.now()
+        try {
+          await this.verifyAhead(campaignId, deviceId)
+        } catch (err) {
+          // A failed check is not a reason to stop sending: the number stays
+          // "unknown" and is tried normally.
+          console.warn(`number check failed on ${deviceId}`, err)
+        }
+      }
+
       const claimed = claimNext(campaignId, deviceId)
       if (!claimed) return
 
-      const [contact, campaign] = await Promise.all([
-        prisma.contact.findUnique({ where: { id: claimed.contactId } }),
-        prisma.campaign.findUnique({
-          where: { id: campaignId },
-          include: { template: true },
-        }),
-      ])
-      if (!campaign) return
-
-      let values: Record<string, string> = {}
-      if (contact) {
-        try {
-          const parsed: unknown = JSON.parse(contact.data)
-          if (parsed && typeof parsed === 'object') {
-            values = Object.fromEntries(
-              Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [
-                k,
-                String(v ?? ''),
-              ]),
-            )
-          }
-        } catch {
-          values = { Name: contact.name, Mobile: contact.phone }
-        }
+      // Opt-outs can arrive mid-campaign, after the queue was built.
+      if ((await suppressedPhones([claimed.phone])).size > 0) {
+        await prisma.campaignRecipient.update({
+          where: { id: claimed.id },
+          data: { status: 'skipped', error: 'Opted out', sentAt: new Date() },
+        })
+        continue
       }
+
+      const contact = await prisma.contact.findUnique({
+        where: { id: claimed.contactId },
+      })
+      const values = contact ? mergeValues(contact) : {}
 
       try {
         const { messageId } = await waBridge.request('message:send', {
@@ -379,19 +553,20 @@ export class CampaignEngine {
           data: { status: 'sent', messageId, sentAt: new Date(), error: null },
         })
         await bumpDailyCount(deviceId)
+        this.health.record(deviceId, true)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
 
-        if (isDailyCapError(message)) {
-          // WHY no attempt is charged: the message never reached WhatsApp. Counting
-          // it as a failure meant a recipient that met the cap on three
+        if (isParkingError(message)) {
+          // WHY no attempt is charged: the message never reached WhatsApp.
+          // Counting it as a failure meant a recipient that met the cap on three
           // consecutive days was marked failed without ever being tried.
           await prisma.campaignRecipient.update({
             where: { id: claimed.id },
             data: { status: 'pending', claimedAt: null },
           })
-          // This device is parked until tomorrow. `runScheduled` restarts the
-          // campaign once the device has headroom again.
+          // Parked until the cap resets or quiet hours end. `runScheduled`
+          // restarts the campaign once the device can send again.
           return
         }
 
@@ -409,6 +584,12 @@ export class CampaignEngine {
             ...(canRetry ? {} : { sentAt: new Date() }),
           },
         })
+
+        const trip = this.health.record(deviceId, false, message)
+        if (trip) {
+          await this.tripHealth(deviceId, trip)
+          if (await this.healthPaused(deviceId)) return
+        }
       }
 
       // Batched so a 100k-recipient run cannot flood the renderer.
@@ -450,6 +631,16 @@ export class CampaignEngine {
       },
     })
     this.progress?.(campaignId, c)
+
+    if (status === 'completed' && current?.status === 'running') {
+      await emitWebhook('campaign.completed', {
+        campaignId,
+        name: current.name,
+        total: c.total,
+        sent: c.sent,
+        failed: c.failed,
+      }).catch((err: unknown) => console.error('campaign.completed webhook failed', err))
+    }
   }
 
   async pause(campaignId: string): Promise<void> {
@@ -553,7 +744,7 @@ export class CampaignEngine {
       })
       if (!campaign) continue
       for (const link of campaign.devices) {
-        await this.configureThrottle(campaign, link.deviceId)
+        await applyDevicePolicy(link.deviceId, campaign)
       }
     }
   }
@@ -655,11 +846,11 @@ export class CampaignEngine {
   }
 
   /**
-   * Campaigns parked on the daily cap whose devices can send again.
+   * Parked campaigns whose devices can send again.
    *
    * A campaign is parked when it is `running` in the database, has no workers
    * in this process, and still has pending rows — every worker returned because
-   * its device hit the cap. WHY this is derived from SQLite rather than tracked
+   * its device hit the cap, quiet hours began, or the health breaker paused it. WHY this is derived from SQLite rather than tracked
    * in memory: it survives a restart for free, and pause/stop need no extra
    * bookkeeping because they change the status.
    *
@@ -675,19 +866,37 @@ export class CampaignEngine {
     })
     if (candidates.length === 0) return []
 
-    const cap = await dailyCapPerDevice()
+    const defaults = await readSendingDefaults()
+    // Nothing automated can send in quiet hours; restarting now would only park
+    // again on the first claim.
+    if (inQuietHours(quietWindow(defaults))) return []
+
+    const now = new Date()
     const ready: Array<{ id: string }> = []
     for (const campaign of candidates) {
       const waiting = await prisma.campaignRecipient.findMany({
         where: { campaignId: campaign.id, status: 'pending' },
         distinct: ['deviceId'],
-        select: { device: { select: { dailySentCount: true, dailyCountResetAt: true } } },
+        select: {
+          device: {
+            select: {
+              dailySentCount: true,
+              dailyCountResetAt: true,
+              warmupEnabled: true,
+              warmupStartedAt: true,
+              healthPausedUntil: true,
+            },
+          },
+        },
         take: 20,
       })
-      const hasHeadroom = waiting.some(
-        ({ device }) =>
-          cap === 0 || isStale(device.dailyCountResetAt) || device.dailySentCount < cap,
-      )
+      const hasHeadroom = waiting.some(({ device }) => {
+        if (device.healthPausedUntil && device.healthPausedUntil > now) return false
+        const cap = effectiveCap(defaults.dailyCapPerDevice, device)
+        return (
+          cap === 0 || isStaleDay(device.dailyCountResetAt) || device.dailySentCount < cap
+        )
+      })
       if (hasHeadroom) ready.push(campaign)
     }
     return ready

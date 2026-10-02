@@ -15,7 +15,7 @@ import type {
   IpcChannel,
   IpcEvent,
   IpcEventPayload,
-  IpcRequest,
+  IpcRequestInput,
   IpcResponse,
   IpcResult,
 } from '../../shared/ipc'
@@ -26,7 +26,7 @@ const events = new Set<string>(IPC_EVENTS)
 const api = {
   invoke<C extends IpcChannel>(
     channel: C,
-    request?: IpcRequest<C>,
+    request?: IpcRequestInput<C>,
   ): Promise<IpcResult<IpcResponse<C>>> {
     if (!channels.has(channel)) {
       return Promise.resolve({

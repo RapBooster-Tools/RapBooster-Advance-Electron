@@ -44,10 +44,23 @@ export type CampaignStatus = z.infer<typeof campaignStatus>
 export const recipientStatus = z.enum(['pending', 'sending', 'sent', 'failed', 'skipped'])
 export type RecipientStatus = z.infer<typeof recipientStatus>
 
-export const templateType = z.enum(['text', 'media', 'interactive', 'button'])
+export const templateType = z.enum([
+  'text',
+  'media',
+  'interactive',
+  'button',
+  // Rich types (D89). Their payload lives in Template.extra — see rich-message.ts.
+  'voice',
+  'sticker',
+  'location',
+  'contact',
+  'poll',
+  'event',
+  'product',
+])
 export type TemplateType = z.infer<typeof templateType>
 
-export const mediaType = z.enum(['image', 'video'])
+export const mediaType = z.enum(['image', 'video', 'audio', 'sticker'])
 export type MediaType = z.infer<typeof mediaType>
 
 export const messageDirection = z.enum(['in', 'out'])
@@ -59,6 +72,13 @@ export const messageType = z.enum([
   'attachment',
   'buttons',
   'interactive',
+  'voice',
+  'sticker',
+  'location',
+  'contact',
+  'poll',
+  'event',
+  'product',
 ])
 export type MessageType = z.infer<typeof messageType>
 
@@ -129,3 +149,68 @@ export const MAX_LIST_ROWS = 10
 
 /** Concurrency ceiling for connected devices (SPRINTS.md §1.1). */
 export const MAX_DEVICES = 20
+
+// ─────────────────────────── marketing suite (D89) ──────────────────────────
+
+/** Whether a number was found on WhatsApp the last time it was checked. */
+export const waNumberStatus = z.enum(['unknown', 'valid', 'invalid'])
+export type WaNumberStatus = z.infer<typeof waNumberStatus>
+
+export const tagSource = z.enum(['manual', 'wa_label'])
+export type TagSource = z.infer<typeof tagSource>
+
+export const suppressionSource = z.enum(['manual', 'stop_keyword', 'import'])
+export type SuppressionSource = z.infer<typeof suppressionSource>
+
+export const postTarget = z.enum(['status', 'channel'])
+export type PostTarget = z.infer<typeof postTarget>
+
+export const postKind = z.enum(['text', 'image', 'video'])
+export type PostKind = z.infer<typeof postKind>
+
+export const postStatus = z.enum([
+  'scheduled',
+  'posting',
+  'posted',
+  'failed',
+  'cancelled',
+])
+export type PostStatus = z.infer<typeof postStatus>
+
+export const aiProvider = z.enum(['openai', 'anthropic', 'gemini', 'compatible'])
+export type AiProvider = z.infer<typeof aiProvider>
+
+export const aiDraftStatus = z.enum(['pending_approval', 'held', 'sent', 'discarded'])
+export type AiDraftStatus = z.infer<typeof aiDraftStatus>
+
+export const ruleMatchType = z.enum(['contains', 'exact', 'starts_with'])
+export type RuleMatchType = z.infer<typeof ruleMatchType>
+
+export const webhookEvent = z.enum([
+  'message.received',
+  'reply.attributed',
+  'optout.added',
+  'chat.escalated',
+  'campaign.completed',
+  'sequence.completed',
+  'call.rejected',
+])
+export type WebhookEvent = z.infer<typeof webhookEvent>
+
+export const sequenceStatus = z.enum(['active', 'paused', 'archived'])
+export type SequenceStatus = z.infer<typeof sequenceStatus>
+
+export const enrollmentStatus = z.enum([
+  'active',
+  'sending',
+  'completed',
+  'stopped',
+  'failed',
+])
+export type EnrollmentStatus = z.infer<typeof enrollmentStatus>
+
+export const groupMemberAction = z.enum(['add', 'remove', 'promote', 'demote'])
+export type GroupMemberAction = z.infer<typeof groupMemberAction>
+
+/** "HH:MM", 24-hour, local time. */
+export const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM')

@@ -1,5 +1,8 @@
 import {
   Bot,
+  ListOrdered,
+  Radio,
+  Zap,
   Contact,
   FileText,
   LayoutDashboard,
@@ -29,8 +32,10 @@ export interface NavItem {
 }
 
 /**
- * Sidebar order is taken verbatim from the prototype (SPRINTS.md §2), with
- * Lucide icons replacing its emoji. Settings is pinned to the bottom.
+ * Sidebar order is taken from the prototype (SPRINTS.md §2), with Lucide icons
+ * replacing its emoji, plus the D89 screens (Sequences, Status & Channels,
+ * Automation) placed beside the features they extend. Settings is pinned to the
+ * bottom.
  */
 export const PRIMARY_NAV: NavItem[] = [
   {
@@ -53,6 +58,20 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Campaigns',
     icon: Megaphone,
     testId: 'nav-campaigns',
+  },
+  {
+    href: '/sequences',
+    segment: 'sequences',
+    label: 'Sequences',
+    icon: ListOrdered,
+    testId: 'nav-sequences',
+  },
+  {
+    href: '/broadcast',
+    segment: 'broadcast',
+    label: 'Status & Channels',
+    icon: Radio,
+    testId: 'nav-broadcast',
   },
   {
     href: '/groups',
@@ -81,6 +100,13 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Templates',
     icon: FileText,
     testId: 'nav-templates',
+  },
+  {
+    href: '/automation',
+    segment: 'automation',
+    label: 'Automation',
+    icon: Zap,
+    testId: 'nav-automation',
   },
   {
     href: '/chatbot',

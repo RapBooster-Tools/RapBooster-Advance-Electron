@@ -16,7 +16,15 @@
  * that was not in the build simply will not run.
  */
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 
 const SRC = 'renderer/out'
@@ -62,4 +70,6 @@ for (const file of htmlFiles(DEST)) {
 
 writeFileSync(HASH_FILE, JSON.stringify([...hashes].sort(), null, 2))
 
-console.log(`copy-renderer: ${SRC} -> ${DEST} (${hashes.size} inline-script hashes pinned)`)
+console.log(
+  `copy-renderer: ${SRC} -> ${DEST} (${hashes.size} inline-script hashes pinned)`,
+)

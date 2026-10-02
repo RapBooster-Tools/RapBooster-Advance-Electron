@@ -12,16 +12,43 @@ import { userDataDir } from '../db/paths'
 import { campaignEngine, counters } from '../services/campaign-engine'
 import { toCsvValue as csv } from '../services/csv'
 import { registerHandler } from './router'
+import {
+  effectiveCap,
+  isStaleDay,
+  readSendingDefaults,
+  warmupCap,
+  warmupDay,
+} from '../services/sending-policy'
+
+/** Delivery, read and reply counts — SQL aggregates, never in-memory counters. */
+async function engagement(campaignId: string) {
+  const prisma = getPrisma()
+  const [skipped, delivered, read, replied] = await Promise.all([
+    prisma.campaignRecipient.count({ where: { campaignId, status: 'skipped' } }),
+    // Read implies delivered: a receipt for "read" can arrive without the
+    // "delivered" one before it.
+    prisma.campaignRecipient.count({
+      where: {
+        campaignId,
+        OR: [{ deliveredAt: { not: null } }, { readAt: { not: null } }],
+      },
+    }),
+    prisma.campaignRecipient.count({ where: { campaignId, readAt: { not: null } } }),
+    prisma.campaignRecipient.count({ where: { campaignId, repliedAt: { not: null } } }),
+  ])
+  return { skipped, delivered, read, replied }
+}
 
 async function serialize(id: string) {
   const campaign = await getPrisma().campaign.findUnique({
     where: { id },
-    include: { devices: true, lists: true, template: true },
+    include: { devices: true, lists: true, tags: true, template: true },
   })
   if (!campaign)
     throw new AppError('NOT_FOUND', { userMessage: 'That campaign no longer exists.' })
 
   const c = await counters(id)
+  const e = await engagement(id)
 
   return {
     id: campaign.id,
@@ -41,10 +68,78 @@ async function serialize(id: string) {
     sentCount: c.sent,
     failedCount: c.failed,
     createdAt: campaign.createdAt.toISOString(),
+    includeTagIds: campaign.tags.filter((t) => t.mode === 'include').map((t) => t.tagId),
+    excludeTagIds: campaign.tags.filter((t) => t.mode === 'exclude').map((t) => t.tagId),
+    checkNumbers: campaign.checkNumbers,
+    skippedCount: e.skipped,
+    deliveredCount: e.delivered,
+    readCount: e.read,
+    repliedCount: e.replied,
   }
 }
 
+/** Local-midnight boundaries for the last `days` days, oldest first. */
+function dayRanges(days: number): Array<{ date: string; from: Date; to: Date }> {
+  const out: Array<{ date: string; from: Date; to: Date }> = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const from = new Date(today)
+    from.setDate(today.getDate() - i)
+    const to = new Date(from)
+    to.setDate(from.getDate() + 1)
+    const date = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(
+      from.getDate(),
+    ).padStart(2, '0')}`
+    out.push({ date, from, to })
+  }
+  return out
+}
+
 export function registerCampaignHandlers(): void {
+  // Seven days of campaign outcomes, from recipient rows (D89, Phase 3).
+  registerHandler('system:analytics', async () => {
+    const prisma = getPrisma()
+    const days = await Promise.all(
+      dayRanges(7).map(async ({ date, from, to }) => {
+        const inDay = { gte: from, lt: to }
+        const [sent, failed, delivered, read, replied] = await Promise.all([
+          prisma.campaignRecipient.count({ where: { status: 'sent', sentAt: inDay } }),
+          prisma.campaignRecipient.count({ where: { status: 'failed', sentAt: inDay } }),
+          prisma.campaignRecipient.count({ where: { deliveredAt: inDay } }),
+          prisma.campaignRecipient.count({ where: { readAt: inDay } }),
+          prisma.campaignRecipient.count({ where: { repliedAt: inDay } }),
+        ])
+        return { date, sent, failed, delivered, read, replied }
+      }),
+    )
+
+    const defaults = await readSendingDefaults()
+    const now = new Date()
+    const deviceRows = await prisma.device.findMany({
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    })
+    const devices = deviceRows.map((d) => ({
+      deviceId: d.id,
+      name: d.name,
+      sentToday: isStaleDay(d.dailyCountResetAt) ? 0 : d.dailySentCount,
+      cap: effectiveCap(defaults.dailyCapPerDevice, d),
+      warmupCap: warmupCap(warmupDay(d)),
+      healthPausedUntil:
+        d.healthPausedUntil && d.healthPausedUntil > now
+          ? d.healthPausedUntil.toISOString()
+          : null,
+    }))
+
+    const [repliesAwaiting, escalated] = await Promise.all([
+      prisma.aiDraft.count({ where: { status: { in: ['pending_approval', 'held'] } } }),
+      prisma.chat.count({ where: { isEscalated: true } }),
+    ])
+
+    return { days, devices, repliesAwaiting, escalated }
+  })
+
   registerHandler('campaign:list', async () => {
     const rows = await getPrisma().campaign.findMany({ orderBy: { createdAt: 'desc' } })
     return Promise.all(rows.map((r) => serialize(r.id)))
@@ -58,10 +153,19 @@ export function registerCampaignHandlers(): void {
       throw new AppError('VALIDATION_FAILED', { userMessage: 'Fill all required fields' })
     }
 
-    // Mirrors the prototype's validation message.
-    if (input.deviceIds.length === 0 || input.listIds.length === 0) {
+    // Mirrors the prototype's validation message. An audience can now come from
+    // lists, included tags, or both (D89).
+    if (
+      input.deviceIds.length === 0 ||
+      (input.listIds.length === 0 && input.includeTagIds.length === 0)
+    ) {
       throw new AppError('VALIDATION_FAILED', {
         userMessage: 'Select at least one device and contact list',
+      })
+    }
+    if (input.includeTagIds.some((t) => input.excludeTagIds.includes(t))) {
+      throw new AppError('VALIDATION_FAILED', {
+        userMessage: 'A tag cannot be both included and excluded.',
       })
     }
 
@@ -82,12 +186,47 @@ export function registerCampaignHandlers(): void {
         delayTo: input.delayTo,
         sleepDuration: input.sleepDuration,
         sleepAfter: input.sleepAfter,
+        checkNumbers: input.checkNumbers,
         devices: { create: input.deviceIds.map((deviceId) => ({ deviceId })) },
         lists: { create: input.listIds.map((listId) => ({ listId })) },
+        tags: {
+          create: [
+            ...input.includeTagIds.map((tagId) => ({ tagId, mode: 'include' })),
+            ...input.excludeTagIds.map((tagId) => ({ tagId, mode: 'exclude' })),
+          ],
+        },
       },
     })
 
     return serialize(created.id)
+  })
+
+  // Same audience, template and pacing; a fresh draft with no recipients yet.
+  registerHandler('campaign:duplicate', async ({ id, name }) => {
+    const source = await getPrisma().campaign.findUnique({
+      where: { id },
+      include: { devices: true, lists: true, tags: true },
+    })
+    if (!source) {
+      throw new AppError('NOT_FOUND', { userMessage: 'That campaign no longer exists.' })
+    }
+    const copy = await getPrisma().campaign.create({
+      data: {
+        name: name ?? `${source.name} (copy)`,
+        templateId: source.templateId,
+        status: 'draft',
+        delayFrom: source.delayFrom,
+        delayTo: source.delayTo,
+        sleepDuration: source.sleepDuration,
+        sleepAfter: source.sleepAfter,
+        retryAttempts: source.retryAttempts,
+        checkNumbers: source.checkNumbers,
+        devices: { create: source.devices.map((d) => ({ deviceId: d.deviceId })) },
+        lists: { create: source.lists.map((l) => ({ listId: l.listId })) },
+        tags: { create: source.tags.map((t) => ({ tagId: t.tagId, mode: t.mode })) },
+      },
+    })
+    return { id: copy.id }
   })
 
   registerHandler('campaign:start', async ({ id }) => {
@@ -136,6 +275,7 @@ export function registerCampaignHandlers(): void {
     )
 
     const c = await counters(id)
+    const e = await engagement(id)
 
     // One row per recipient (REQUIREMENTS §7.2, assumption A9) rather than the
     // prototype's plain-text summary: a summary cannot tell the user *which*
@@ -150,8 +290,14 @@ export function registerCampaignHandlers(): void {
       stream.write(`# Total,${c.total}\n`)
       stream.write(`# Sent,${c.sent}\n`)
       stream.write(`# Failed,${c.failed}\n`)
+      stream.write(`# Skipped,${e.skipped}\n`)
+      stream.write(`# Delivered,${e.delivered}\n`)
+      stream.write(`# Read,${e.read}\n`)
+      stream.write(`# Replied,${e.replied}\n`)
       stream.write(`# Generated,${new Date().toISOString()}\n`)
-      stream.write('phone,name,device,status,attempts,sentAt,error\n')
+      stream.write(
+        'phone,name,device,status,attempts,sentAt,deliveredAt,readAt,repliedAt,error\n',
+      )
 
       let cursor: string | undefined
       for (;;) {
@@ -179,6 +325,9 @@ export function registerCampaignHandlers(): void {
               csv(r.status),
               String(r.attempts),
               csv(r.sentAt?.toISOString() ?? ''),
+              csv(r.deliveredAt?.toISOString() ?? ''),
+              csv(r.readAt?.toISOString() ?? ''),
+              csv(r.repliedAt?.toISOString() ?? ''),
               csv(r.error ?? ''),
             ].join(',') + '\n',
           )
@@ -226,6 +375,9 @@ export function registerCampaignHandlers(): void {
         attempts: r.attempts,
         error: r.error,
         sentAt: r.sentAt?.toISOString() ?? null,
+        deliveredAt: r.deliveredAt?.toISOString() ?? null,
+        readAt: r.readAt?.toISOString() ?? null,
+        repliedAt: r.repliedAt?.toISOString() ?? null,
       })),
       nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
       total,
