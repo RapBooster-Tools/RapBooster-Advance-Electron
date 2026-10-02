@@ -35,6 +35,8 @@
     // Graphify output is regenerated wholesale each sprint; its formatting is
     // the tool's, not ours, so linting it would fail on every refresh.
     "graphify-out/**",
+    // Agent worktrees are full repository copies, linted in their own right.
+    ".claude/worktrees/**",
     "GRAPH_REPORT.md",
   ],
 }

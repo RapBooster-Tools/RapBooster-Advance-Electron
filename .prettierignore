@@ -12,3 +12,4 @@ prisma/migrations
 renderer/next-env.d.ts
 graphify-out
 GRAPH_REPORT.md
+.claude/worktrees

@@ -22,6 +22,9 @@ blob-report/
 # Graphify knowledge graph (GRAPH_REPORT.md IS committed)
 graphify-out/
 
+# Agent worktrees created during parallel builds — scratch, never committed
+.claude/worktrees/
+
 # Secrets — never commit
 REQUIREMENTS.local.md
 .env
