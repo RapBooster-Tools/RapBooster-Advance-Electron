@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { Smartphone } from 'lucide-react'
 import { useState } from 'react'
 import { AddDeviceDialog } from '@renderer/components/devices/add-device-dialog'
+import { DeviceSafety, type DeviceRow } from '@renderer/components/devices/device-safety'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -24,8 +25,16 @@ export default function DevicesPage() {
   const [confirmLogout, setConfirmLogout] = useState<string>()
   const [busyId, setBusyId] = useState<string>()
 
-  // Status arrives as a push event, so the list stays live without polling.
+  // Status, warmup, health and business changes arrive as push events, so the
+  // list stays live without polling. Campaign progress moves today's counts.
   useIpcEvent('device:status', () => devices.refetch())
+  useIpcEvent('device:updated', () => devices.refetch())
+  useIpcEvent('campaign:progress', () => devices.refetch())
+
+  // A refetch clears `data` until it settles; holding the last list keeps the
+  // cards (and a switch mid-click) from blinking out on every event.
+  const [shown, setShown] = useState<DeviceRow[]>()
+  if (devices.data && devices.data !== shown) setShown(devices.data)
 
   async function run(id: string, action: 'device:reconnect' | 'device:logout') {
     setBusyId(id)
@@ -36,7 +45,7 @@ export default function DevicesPage() {
     devices.refetch()
   }
 
-  const list = devices.data ?? []
+  const list = devices.data ?? shown ?? []
   const atLimit = list.length >= MAX_DEVICES
 
   return (
@@ -98,6 +107,8 @@ export default function DevicesPage() {
                   <dd>{relative(device.lastActiveAt)}</dd>
                 </div>
               </dl>
+
+              <DeviceSafety device={device} onChanged={devices.refetch} />
 
               {device.lastError && (
                 <p
