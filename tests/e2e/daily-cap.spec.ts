@@ -190,3 +190,55 @@ test("E3.28 — yesterday's sends do not count against today's cap", async () =>
     cleanupUserDataDir(dir)
   }
 })
+
+function recipientRows(dir: string): { status: string; attempts: number }[] {
+  const db = new DatabaseSync(join(dir, 'rapbooster.db'), { readOnly: true })
+  try {
+    return db
+      .prepare('SELECT status, attempts FROM CampaignRecipient')
+      .all() as unknown as { status: string; attempts: number }[]
+  } finally {
+    db.close()
+  }
+}
+
+test('E3.29 — a campaign parked on the cap charges no attempts and resumes on headroom', async () => {
+  // Two defects: hitting the cap counted as a failed attempt, so a recipient
+  // who met the cap on enough days was marked failed without ever being tried;
+  // and nothing restarted the campaign — it sat at "running" until the app was
+  // relaunched. Raising the cap stands in for midnight: both give the device
+  // headroom, and the scheduler tick must notice either way.
+  test.setTimeout(180_000)
+  const dir = newUserDataDir()
+  const { app, win } = await launchLicensed(dir)
+  try {
+    const setCap = (cap: number) =>
+      win.evaluate(async (value) => {
+        const current = await window.api.invoke('settings:getSendingDefaults')
+        if (!current.ok) throw new Error('defaults')
+        await window.api.invoke('settings:setSendingDefaults', {
+          ...current.data,
+          dailyCapPerDevice: value,
+        })
+      }, cap)
+
+    await setCap(3)
+    const f = await seed(win, 10)
+    await startCampaign(win, f)
+
+    await expect.poll(() => sentCount(dir), { timeout: 45_000 }).toBe(3)
+    await win.waitForTimeout(2000)
+    const parked = recipientRows(dir)
+    expect(parked.filter((r) => r.status === 'failed')).toHaveLength(0)
+    expect(
+      parked.filter((r) => r.status === 'pending').every((r) => r.attempts === 0),
+    ).toBe(true)
+
+    await setCap(6)
+    // The scheduler ticks once a minute.
+    await expect.poll(() => sentCount(dir), { timeout: 90_000 }).toBe(6)
+  } finally {
+    await app.close()
+    cleanupUserDataDir(dir)
+  }
+})

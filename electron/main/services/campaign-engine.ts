@@ -62,6 +62,11 @@ async function bumpDailyCount(deviceId: string): Promise<void> {
   })
 }
 
+/** True for the throttle's `DailyCapReachedError`, which crosses the bridge as text. */
+function isDailyCapError(message: string): boolean {
+  return message.includes('daily cap')
+}
+
 /** Retryable failures are transient; terminal ones will fail identically forever. */
 function isRetryable(message: string): boolean {
   const terminal = [
@@ -147,9 +152,11 @@ export class CampaignEngine {
   /**
    * Expand a campaign's lists into queue rows.
    *
-   * Batched and de-duplicated: a contact appearing in two selected lists must
-   * be queued once, which the unique(campaignId, contactId) constraint also
-   * enforces at the database level.
+   * Batched and de-duplicated by phone number. The same person imported into
+   * two selected lists is two `Contact` rows with different ids, so the
+   * unique(campaignId, contactId) constraint does not catch it — and messaging
+   * one number twice in a single campaign is exactly what gets accounts
+   * reported. The first list the number appears in wins.
    */
   async expand(campaignId: string): Promise<number> {
     const prisma = getPrisma()
@@ -170,6 +177,9 @@ export class CampaignEngine {
     let created = 0
     let cursor: string | undefined
     let index = 0
+    // NOTE: spans every batch. Phones are E.164-normalized on import, so string
+    // equality is number equality. ~50k strings is a few MB, well within budget.
+    const seenPhones = new Set<string>()
 
     for (;;) {
       const contacts = await prisma.contact.findMany({
@@ -180,23 +190,25 @@ export class CampaignEngine {
       })
       if (contacts.length === 0) break
 
+      const fresh = contacts.filter((contact) => {
+        if (seenPhones.has(contact.phone)) return false
+        seenPhones.add(contact.phone)
+        return true
+      })
+
       // Round-robin across devices so no single account carries the run.
-      const rows = contacts.map((contact) => ({
+      // Assigned after de-duplication so dropped rows do not skew the split.
+      const rows = fresh.map((contact) => ({
         campaignId,
         contactId: contact.id,
         deviceId: deviceIds[index++ % deviceIds.length]!,
         phone: contact.phone,
       }))
 
-      const seen = new Set<string>()
-      const deduped = rows.filter((r) => {
-        if (seen.has(r.contactId)) return false
-        seen.add(r.contactId)
-        return true
-      })
-
-      const result = await prisma.campaignRecipient.createMany({ data: deduped })
-      created += result.count
+      if (rows.length > 0) {
+        const result = await prisma.campaignRecipient.createMany({ data: rows })
+        created += result.count
+      }
       cursor = contacts[contacts.length - 1]?.id
     }
 
@@ -266,14 +278,30 @@ export class CampaignEngine {
   async start(campaignId: string): Promise<void> {
     if (this.running.has(campaignId)) return
 
-    const prisma = getPrisma()
-    await this.expand(campaignId)
+    // NOTE: the slot is claimed before the first await. Boot recovery,
+    // wa-service recovery and the scheduler tick can all call start() for the
+    // same campaign; claiming it only after setup let two of them through the
+    // guard and launch a second set of workers.
+    const controller = new AbortController()
+    this.running.set(campaignId, controller)
 
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      include: { devices: true, template: true },
-    })
-    if (!campaign) throw new Error(`campaign ${campaignId} not found`)
+    const prisma = getPrisma()
+    let campaign
+    try {
+      await this.expand(campaignId)
+
+      campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        include: { devices: true, template: true },
+      })
+      if (!campaign) throw new Error(`campaign ${campaignId} not found`)
+    } catch (err) {
+      this.running.delete(campaignId)
+      throw err
+    }
+
+    // Paused or stopped while being set up: leave the status they wrote.
+    if (controller.signal.aborted) return
 
     await prisma.campaign.update({
       where: { id: campaignId },
@@ -285,9 +313,6 @@ export class CampaignEngine {
     for (const link of campaign.devices) {
       await this.configureThrottle(campaign, link.deviceId)
     }
-
-    const controller = new AbortController()
-    this.running.set(campaignId, controller)
 
     // One worker per device, running concurrently. Pacing inside wa-service
     // keeps each individual account sequential.
@@ -356,6 +381,20 @@ export class CampaignEngine {
         await bumpDailyCount(deviceId)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+
+        if (isDailyCapError(message)) {
+          // WHY no attempt is charged: the message never reached WhatsApp. Counting
+          // it as a failure meant a recipient that met the cap on three
+          // consecutive days was marked failed without ever being tried.
+          await prisma.campaignRecipient.update({
+            where: { id: claimed.id },
+            data: { status: 'pending', claimedAt: null },
+          })
+          // This device is parked until tomorrow. `runScheduled` restarts the
+          // campaign once the device has headroom again.
+          return
+        }
+
         const attempts = claimed.attempts + 1
         const canRetry = attempts <= retryAttempts && isRetryable(message)
 
@@ -370,12 +409,6 @@ export class CampaignEngine {
             ...(canRetry ? {} : { sentAt: new Date() }),
           },
         })
-
-        if (message.includes('daily cap')) {
-          // The device is parked until tomorrow; this worker has nothing left
-          // to do, and leaving the row pending is correct.
-          return
-        }
       }
 
       // Batched so a 100k-recipient run cannot flood the renderer.
@@ -602,9 +635,10 @@ export class CampaignEngine {
     const due = await getPrisma().campaign.findMany({
       where: { status: 'scheduled', scheduledAt: { lte: new Date() } },
     })
+    const parked = await this.parkedWithHeadroom()
 
     const started: string[] = []
-    for (const campaign of due) {
+    for (const campaign of [...due, ...parked]) {
       if (this.running.has(campaign.id)) continue
       try {
         await this.start(campaign.id)
@@ -618,6 +652,45 @@ export class CampaignEngine {
       }
     }
     return started
+  }
+
+  /**
+   * Campaigns parked on the daily cap whose devices can send again.
+   *
+   * A campaign is parked when it is `running` in the database, has no workers
+   * in this process, and still has pending rows — every worker returned because
+   * its device hit the cap. WHY this is derived from SQLite rather than tracked
+   * in memory: it survives a restart for free, and pause/stop need no extra
+   * bookkeeping because they change the status.
+   *
+   * Without this, a capped campaign sat at `running` forever and only resumed
+   * if the user happened to restart the app.
+   */
+  private async parkedWithHeadroom(): Promise<Array<{ id: string }>> {
+    const prisma = getPrisma()
+    const candidates = await prisma.campaign.findMany({
+      where: { status: 'running', id: { notIn: [...this.running.keys()] } },
+      select: { id: true },
+      take: 100,
+    })
+    if (candidates.length === 0) return []
+
+    const cap = await dailyCapPerDevice()
+    const ready: Array<{ id: string }> = []
+    for (const campaign of candidates) {
+      const waiting = await prisma.campaignRecipient.findMany({
+        where: { campaignId: campaign.id, status: 'pending' },
+        distinct: ['deviceId'],
+        select: { device: { select: { dailySentCount: true, dailyCountResetAt: true } } },
+        take: 20,
+      })
+      const hasHeadroom = waiting.some(
+        ({ device }) =>
+          cap === 0 || isStale(device.dailyCountResetAt) || device.dailySentCount < cap,
+      )
+      if (hasHeadroom) ready.push(campaign)
+    }
+    return ready
   }
 
   async shutdown(): Promise<void> {

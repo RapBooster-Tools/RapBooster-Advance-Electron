@@ -1442,6 +1442,11 @@ bug.
 | E3.23 | Bulk create 5 groups with each of the four suffix rules                   |
 | E3.24 | Bulk create partial failure → summary reports it, job completes           |
 | E3.25 | Participant-add failures are reported per contact, not swallowed          |
+| E3.26 | The Groups screen selects and sends                                       |
+| E3.27 | The configured daily cap stops sending                                    |
+| E3.28 | Yesterday's sends do not count against today's cap                        |
+| E3.29 | A campaign parked on the cap charges no attempts and resumes on headroom  |
+| E3.30 | A number in two selected lists is queued and sent once                    |
 
 ### 11.4 Risks
 
@@ -1566,6 +1571,10 @@ instructions. Final packaged smoke test on both platforms.
 | E4.23 | Update check against a mock feed reports the available version          |
 | E4.24 | Packaged build smoke test on Windows                                    |
 | E4.25 | Full Sprint 1–3 regression suite green                                  |
+| E4.26 | A rejected OpenAI key surfaces as a specific error                      |
+| E4.27 | OpenAI rate limiting is reported and sends nothing                      |
+| E4.28 | The model sees the incoming message exactly once                        |
+| E4.29 | Escalation sends its message, silences the bot, and can be handed back  |
 
 ### 12.4 Risks
 

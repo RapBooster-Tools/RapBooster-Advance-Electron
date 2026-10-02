@@ -5,6 +5,7 @@
  *   - never reply in a group
  *   - never reply to a chat the user opted out of
  *   - never reply to our own outbound message
+ *   - never reply to a chat escalated to a human, until the user hands it back
  *   - never reply when the key is missing — and say why, loudly
  *
  * Every failure mode is distinct and surfaced. A silent no-op would leave the
@@ -102,7 +103,12 @@ export async function testKey(
 }
 
 async function loadSettings(): Promise<
-  (ChatbotSettings & { enabled: boolean; responseDelay: number }) | null
+  | (ChatbotSettings & {
+      enabled: boolean
+      responseDelay: number
+      escalationMessage: string | null
+    })
+  | null
 > {
   const config = await getPrisma().chatbotConfig.findUnique({
     where: { id: 'singleton' },
@@ -134,7 +140,43 @@ async function loadSettings(): Promise<
     escalationKeywords: keywords,
     products: config.products,
     knowledgeBase: config.knowledgeBase,
+    escalationMessage: config.escalationMessage,
   }
+}
+
+/**
+ * Send a bot-authored text and record it as an AI message.
+ *
+ * Through wa-service, so the throttle applies — an automated message is still
+ * traffic from the user's account.
+ */
+async function sendBotText(
+  deviceId: string,
+  chatId: string,
+  text: string,
+): Promise<void> {
+  const { messageId } = await waBridge.request('message:send', {
+    deviceId,
+    to: chatId,
+    message: { kind: 'text', body: text },
+  })
+
+  await getPrisma().message.create({
+    data: {
+      id: messageId,
+      chatId,
+      direction: 'out',
+      type: 'text',
+      body: text,
+      status: 'sent',
+      isAiReply: true,
+      timestamp: new Date(),
+    },
+  })
+  await getPrisma().chat.update({
+    where: { id: chatId },
+    data: { lastMessage: text, lastMessageAt: new Date() },
+  })
 }
 
 export type ReplyOutcome =
@@ -152,7 +194,7 @@ export type ReplyOutcome =
 export async function maybeReply(
   deviceId: string,
   chatId: string,
-  incoming: { body: string | null; isGroup: boolean },
+  incoming: { id: string; body: string | null; isGroup: boolean },
 ): Promise<ReplyOutcome> {
   if (!incoming.body || incoming.body.trim() === '') {
     return { kind: 'skipped', reason: 'message has no text' }
@@ -171,9 +213,30 @@ export async function maybeReply(
   if (chat?.autoReplyOptOut) {
     return { kind: 'skipped', reason: 'chat opted out' }
   }
+  // WHY escalation is sticky: it means "a human owns this conversation now".
+  // Before this check the very next message got an AI reply again, talking
+  // over the person the customer was just promised. `chat:resumeBot` clears it.
+  if (chat?.isEscalated) {
+    return { kind: 'skipped', reason: 'chat is escalated to a human' }
+  }
 
   if (shouldEscalate(incoming.body, settings)) {
     await getPrisma().chat.update({ where: { id: chatId }, data: { isEscalated: true } })
+
+    const notice = settings.escalationMessage?.trim()
+    if (notice) {
+      try {
+        await sendBotText(deviceId, chatId, notice)
+      } catch (err) {
+        return {
+          kind: 'failed',
+          code: 'SEND_FAILED',
+          message: `Escalated for a human reply, but the escalation message could not be sent: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        }
+      }
+    }
     return { kind: 'escalated' }
   }
 
@@ -190,8 +253,11 @@ export async function maybeReply(
   }
 
   const historyDepth = await numberSetting('ai.historyDepth', DEFAULT_HISTORY_DEPTH)
+  // The incoming message is already stored by the time this runs, and
+  // `buildMessages` appends it as the final user turn — so it is excluded here,
+  // or the model would see the customer say it twice.
   const recent = await getPrisma().message.findMany({
-    where: { chatId },
+    where: { chatId, id: { not: incoming.id } },
     orderBy: { timestamp: 'desc' },
     take: historyDepth,
   })
@@ -232,30 +298,7 @@ export async function maybeReply(
   }
 
   try {
-    // Through wa-service, so the throttle applies — an AI reply is still
-    // traffic from the user's account.
-    const { messageId } = await waBridge.request('message:send', {
-      deviceId,
-      to: chatId,
-      message: { kind: 'text', body: text },
-    })
-
-    await getPrisma().message.create({
-      data: {
-        id: messageId,
-        chatId,
-        direction: 'out',
-        type: 'text',
-        body: text,
-        status: 'sent',
-        isAiReply: true,
-        timestamp: new Date(),
-      },
-    })
-    await getPrisma().chat.update({
-      where: { id: chatId },
-      data: { lastMessage: text, lastMessageAt: new Date() },
-    })
+    await sendBotText(deviceId, chatId, text)
   } catch (err) {
     return {
       kind: 'failed',

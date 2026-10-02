@@ -218,6 +218,14 @@ export function registerChatHandlers(): void {
     })
     return { ok: true as const }
   })
+
+  registerHandler('chat:resumeBot', async ({ chatId }) => {
+    await getPrisma().chat.update({
+      where: { id: chatId },
+      data: { isEscalated: false },
+    })
+    return { ok: true as const }
+  })
 }
 
 /**

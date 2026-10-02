@@ -31,6 +31,8 @@ let server: Server
 let baseUrl: string
 let reply: StubReply
 let hits = 0
+/** Raw request bodies, so a spec can assert what the model was actually sent. */
+let requests: string[] = []
 
 test.beforeAll(async () => {
   server = createServer((req, res) => {
@@ -38,6 +40,7 @@ test.beforeAll(async () => {
     req.on('data', (c) => (raw += c))
     req.on('end', () => {
       hits += 1
+      requests.push(raw)
       res.writeHead(reply.status, { 'Content-Type': 'application/json' })
       res.end(reply.body)
     })
@@ -52,6 +55,7 @@ test.afterAll(async () => {
 
 test.beforeEach(() => {
   hits = 0
+  requests = []
 })
 
 function completion(content: string): string {
@@ -216,6 +220,103 @@ test('E4.27 — rate limiting is reported and sends nothing', async () => {
 
     await expect(win.getByTestId('toast').first()).toBeVisible({ timeout: 30_000 })
     expect(aiReplies(dir)).toHaveLength(0)
+  } finally {
+    await app.close()
+    cleanupUserDataDir(dir)
+  }
+})
+
+test('E4.28 — the model sees the incoming message exactly once', async () => {
+  // The inbound message is stored before the responder runs, so the history
+  // query picked it up and the prompt builder then appended it again.
+  const dir = newUserDataDir()
+  reply = { status: 200, body: completion('Happy to help.') }
+  const { app, win } = await launchWithAi(dir)
+  try {
+    await armAutoReply(win)
+    await receiveMessage(win)
+
+    await expect.poll(() => requests.length, { timeout: 30_000 }).toBeGreaterThan(0)
+    const sent = JSON.parse(requests[0]!) as {
+      messages: { role: string; content: string }[]
+    }
+    const userTurns = sent.messages.filter((m) => m.role === 'user')
+    expect(userTurns.filter((m) => m.content === 'Mock inbound 1')).toHaveLength(1)
+    expect(sent.messages.at(-1)).toEqual({ role: 'user', content: 'Mock inbound 1' })
+  } finally {
+    await app.close()
+    cleanupUserDataDir(dir)
+  }
+})
+
+function inboundCount(dir: string): number {
+  const db = new DatabaseSync(join(dir, 'rapbooster.db'), { readOnly: true })
+  try {
+    const row = db
+      .prepare(`SELECT COUNT(*) AS n FROM Message WHERE direction = 'in'`)
+      .get() as { n: number }
+    return Number(row.n)
+  } finally {
+    db.close()
+  }
+}
+
+test('E4.29 — escalation sends its message, silences the bot, and can be handed back', async () => {
+  test.setTimeout(180_000)
+  const dir = newUserDataDir()
+  reply = { status: 200, body: completion('Bot answer.') }
+  const { app, win } = await launchWithAi(dir)
+  try {
+    await armAutoReply(win)
+    const setKeywords = (keywords: string[]) =>
+      win.evaluate(async (kw) => {
+        const current = await window.api.invoke('chatbot:get')
+        if (!current.ok) throw new Error('chatbot:get failed')
+        await window.api.invoke('chatbot:save', {
+          ...current.data,
+          escalationTrigger: 'keywords',
+          escalationKeywords: kw,
+          escalationMessage: 'A teammate will reply shortly.',
+        })
+      }, keywords)
+    // The mock's inbound text is "Mock inbound 1", so this keyword escalates it.
+    await setKeywords(['inbound'])
+
+    const deviceId = await win.evaluate(async () => {
+      const created = await window.api.invoke('device:create', { name: 'AI Device' })
+      if (!created.ok) throw new Error('device:create failed')
+      await window.api.invoke('device:connect', { id: created.data.id })
+      return created.data.id
+    })
+    const reconnect = () =>
+      win.evaluate((id) => window.api.invoke('device:reconnect', { id }), deviceId)
+
+    // 1. The configured escalation message goes out; the model is not called.
+    await expect
+      .poll(() => aiReplies(dir).map((r) => r.body), { timeout: 30_000 })
+      .toEqual(['A teammate will reply shortly.'])
+    expect(hits).toBe(0)
+
+    // 2. Escalation sticks. Even with a message that would not escalate on its
+    //    own, the bot stays quiet: a human owns this conversation now.
+    await setKeywords(['no-such-keyword'])
+    await reconnect()
+    await expect.poll(() => inboundCount(dir), { timeout: 30_000 }).toBe(2)
+    await win.waitForTimeout(2000)
+    expect(hits).toBe(0)
+    expect(aiReplies(dir)).toHaveLength(1)
+
+    // 3. The inbox hands it back, and the next message is answered again.
+    await win.getByTestId('nav-inbox').click()
+    await win.getByTestId('chat-item').first().click()
+    await expect(win.getByTestId('chat-escalated')).toBeVisible()
+    await win.getByTestId('resume-bot').click()
+    await expect(win.getByTestId('chat-escalated')).toHaveCount(0)
+
+    await reconnect()
+    await expect
+      .poll(() => aiReplies(dir).map((r) => r.body), { timeout: 30_000 })
+      .toContain('Bot answer.')
   } finally {
     await app.close()
     cleanupUserDataDir(dir)

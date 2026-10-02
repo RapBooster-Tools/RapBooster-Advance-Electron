@@ -248,6 +248,7 @@ function startWaService(): void {
         // Auto-reply runs after the message is stored and shown, so the user
         // sees the inbound message immediately rather than after the model.
         void maybeReply(deviceId, saved.chatId, {
+          id: saved.id,
           body: saved.body,
           isGroup: message.isGroup,
         })

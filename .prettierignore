@@ -10,3 +10,5 @@ package-lock.json
 design
 prisma/migrations
 renderer/next-env.d.ts
+graphify-out
+GRAPH_REPORT.md

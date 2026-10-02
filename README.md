@@ -160,14 +160,15 @@ Reproduce with `npm run pack && node scripts/perf.mjs`, and
 
 ## Documents
 
-| Document                                 | What it is                                                            |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| [REQUIREMENTS.md](./REQUIREMENTS.md)     | **Open questions only.** §1–§5 are what still block shipping          |
-| [RELEASE.md](./RELEASE.md)               | How to build, sign and publish a Windows update                       |
-| [SPRINTS.md](./SPRINTS.md)               | Full specification: screens, schema, IPC contract, algorithms         |
-| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) | Live status, decision log, known issues, test history                 |
-| [CLAUDE.md](./CLAUDE.md)                 | Engineering rules for every coding session                            |
-| `design/`                                | Original HTML prototypes — the feature reference, never imported from |
+| Document                                     | What it is                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| [REQUIREMENTS.md](./REQUIREMENTS.md)         | **Open questions only.** §1–§5 are what still block shipping          |
+| [RELEASE.md](./RELEASE.md)                   | How to build, sign and publish a Windows update                       |
+| [SPRINTS.md](./SPRINTS.md)                   | Full specification: screens, schema, IPC contract, algorithms         |
+| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md)     | Live status, decision log, known issues, test history                 |
+| [IMPROVEMENT-PLAN.md](./IMPROVEMENT-PLAN.md) | Post-Sprint-4 roadmap and the questions it still depends on           |
+| [CLAUDE.md](./CLAUDE.md)                     | Engineering rules for every coding session                            |
+| `design/`                                    | Original HTML prototypes — the feature reference, never imported from |
 
 ## Known limitations
 

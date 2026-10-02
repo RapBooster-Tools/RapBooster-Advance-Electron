@@ -102,6 +102,17 @@ export default function InboxPage() {
     }))
   })
 
+  // Escalation pauses auto-reply for this chat until a person hands it back.
+  async function resumeBot(chatId: string) {
+    const result = await window.api.invoke('chat:resumeBot', { chatId })
+    if (!result.ok) {
+      toast('error', result.error.userMessage)
+      return
+    }
+    toast('success', 'Auto-reply resumed for this chat')
+    chats.refetch()
+  }
+
   async function send() {
     if (!activeId || draft.trim() === '') return
     const body = draft.trim()
@@ -234,9 +245,21 @@ export default function InboxPage() {
                   <p className="text-xs text-ink-muted">{active.phone}</p>
                 </div>
                 {active.isEscalated && (
-                  <span className="rounded bg-status-warn-bg px-2 py-0.5 text-xs text-status-warn-fg">
-                    Escalated
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className="rounded bg-status-warn-bg px-2 py-0.5 text-xs text-status-warn-fg"
+                      data-testid="chat-escalated"
+                    >
+                      Escalated
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => void resumeBot(active.id)}
+                      data-testid="resume-bot"
+                    >
+                      Resume bot
+                    </Button>
+                  </div>
                 )}
               </div>
 

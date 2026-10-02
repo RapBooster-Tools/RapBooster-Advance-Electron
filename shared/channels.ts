@@ -73,6 +73,7 @@ export const IPC_CHANNELS = [
   'chat:send',
   'chat:markRead',
   'chat:setOptOut',
+  'chat:resumeBot',
 
   'chatbot:get',
   'chatbot:save',

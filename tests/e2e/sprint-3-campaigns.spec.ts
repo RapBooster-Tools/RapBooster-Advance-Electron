@@ -242,10 +242,12 @@ test('E3.16 — a contact in two selected lists is queued exactly once', async (
       })
       .toBeGreaterThan(0)
 
-    // Two Contact rows exist, so two queue rows are correct — what must not
-    // happen is the same Contact queued twice.
+    // Two Contact rows, one person: queued once. This spec previously expected
+    // two rows here — it asserted the double send rather than preventing it
+    // (D77). E3.30 covers the mixed case.
+    await win.waitForTimeout(1000)
     const rows = recipientRows(dir, ids)
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(1)
   } finally {
     await app.close()
     cleanupUserDataDir(dir)

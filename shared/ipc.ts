@@ -494,6 +494,8 @@ export const ipcContract = {
     request: z.object({ chatId: id, optOut: z.boolean() }),
     response: ok,
   },
+  /** Hand an escalated chat back to the auto-responder. */
+  'chat:resumeBot': { request: z.object({ chatId: id }), response: ok },
 
   // ── Chatbot ──
   'chatbot:get': { request: z.void(), response: chatbotConfig },
