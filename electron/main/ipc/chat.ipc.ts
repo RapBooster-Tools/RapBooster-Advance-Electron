@@ -6,10 +6,12 @@
  * than loaded whole — a long-running account accumulates thousands of messages
  * per chat.
  */
+import { rmSync } from 'node:fs'
 import { AppError } from '../../../shared/errors'
 import { decodeButtons } from '../../../shared/template-buttons'
 import type { MessageType, TemplateButton } from '../../../shared/types'
 import { getPrisma } from '../db/client'
+import { prepareInboxRich } from '../services/inbox-rich'
 import { waBridge } from '../wa-bridge'
 import { registerHandler } from './router'
 
@@ -246,6 +248,54 @@ export function registerChatHandlers(): void {
     await getPrisma().chat.update({
       where: { id: chatId },
       data: { lastMessage: body ?? '[media]', lastMessageAt: new Date() },
+    })
+
+    return serializeMessage(saved)
+  })
+
+  registerHandler('chat:sendRich', async ({ chatId, message }) => {
+    const chat = await getPrisma().chat.findUnique({ where: { id: chatId } })
+    if (!chat)
+      throw new AppError('NOT_FOUND', { userMessage: 'That chat no longer exists.' })
+
+    // Validates and copies a voice note or sticker before anything is sent.
+    const prepared = prepareInboxRich(chatId, message)
+
+    let messageId: string
+    try {
+      const result = await waBridge.request('message:send', {
+        deviceId: chat.deviceId,
+        to: chat.id,
+        message: prepared.message,
+        // Typed by a person in the inbox, like chat:send (D89).
+        manual: true,
+      })
+      messageId = result.messageId
+    } catch (err) {
+      // Nothing will reference the copy of a file that never went out.
+      if (prepared.mediaPath) rmSync(prepared.mediaPath, { force: true })
+      throw new AppError('SEND_FAILED', {
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
+
+    const saved = await getPrisma().message.create({
+      data: {
+        id: messageId,
+        chatId,
+        direction: 'out',
+        type: prepared.type,
+        body: prepared.summary,
+        mediaPath: prepared.mediaPath,
+        fileName: prepared.fileName,
+        status: 'sent',
+        timestamp: new Date(),
+      },
+    })
+
+    await getPrisma().chat.update({
+      where: { id: chatId },
+      data: { lastMessage: prepared.summary, lastMessageAt: new Date() },
     })
 
     return serializeMessage(saved)
