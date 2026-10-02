@@ -1,7 +1,12 @@
 'use client'
 
 import { Bot } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
+import { AiLimitsPanel } from '@renderer/components/chatbot/ai-limits-panel'
+import { AiProviderPanel } from '@renderer/components/chatbot/ai-provider-panel'
+import { AiUsagePanel } from '@renderer/components/chatbot/ai-usage-panel'
+import { Field, INPUT, NumberField, Panel } from '@renderer/components/chatbot/form'
+import type { AiConfig } from '@renderer/components/chatbot/providers'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -75,40 +80,6 @@ const TRIGGERS: Array<[string, string]> = [
   ['time', 'After Time Elapsed'],
 ]
 
-const INPUT =
-  'rounded-control border border-line px-2.5 py-2 text-sm outline-none focus:border-primary'
-
-function Panel({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-card border border-line bg-surface p-4">
-      <h2 className="mb-3 text-sm font-semibold text-ink">{title}</h2>
-      <div className="flex flex-col gap-3">{children}</div>
-    </section>
-  )
-}
-
-function Field({
-  label,
-  htmlFor,
-  children,
-  hint,
-}: {
-  label: string
-  htmlFor: string
-  children: ReactNode
-  hint?: string
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-xs font-semibold text-ink">
-        {label}
-      </label>
-      {children}
-      {hint && <p className="text-xs text-ink-subtle">{hint}</p>}
-    </div>
-  )
-}
-
 export default function AIBotPage() {
   const loaded = useIpcQuery('chatbot:get')
   const toast = useToast()
@@ -118,10 +89,19 @@ export default function AIBotPage() {
   // effect (a cascading render), and a later refetch could clobber edits the
   // user is part-way through.
   const [edits, setEdits] = useState<Config>()
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
+  const ai = useIpcQuery('ai:getConfig')
+  const [aiEdits, setAiEdits] = useState<AiConfig>()
   const [busy, setBusy] = useState(false)
 
   const config = edits ?? (loaded.data as Config | undefined)
+  const aiConfig = aiEdits ?? ai.data?.config
+
+  function setAi<K extends keyof AiConfig>(key: K, value: AiConfig[K]) {
+    setAiEdits((current) => {
+      const base = current ?? ai.data?.config
+      return base ? { ...base, [key]: value } : base
+    })
+  }
 
   function set<K extends keyof Config>(key: K, value: Config[K]) {
     setEdits((current) => {
@@ -134,54 +114,19 @@ export default function AIBotPage() {
     if (!config) return
     setBusy(true)
     const result = await window.api.invoke('chatbot:save', config)
+    const aiResult = aiConfig
+      ? await window.api.invoke('ai:setConfig', aiConfig)
+      : ({ ok: true } as const)
     setBusy(false)
     if (!result.ok) {
       toast('error', result.error.userMessage)
+      return
+    }
+    if (!aiResult.ok) {
+      toast('error', aiResult.error.userMessage)
       return
     }
     toast('success', 'Chatbot configuration saved')
-  }
-
-  async function saveKey() {
-    if (apiKeyDraft.trim() === '') return
-    setBusy(true)
-    const stored = await window.api.invoke('settings:set', {
-      key: 'ai.apiKey',
-      value: apiKeyDraft.trim(),
-      encrypt: true,
-    })
-    setBusy(false)
-    if (!stored.ok) {
-      toast('error', stored.error.userMessage)
-      return
-    }
-    setApiKeyDraft('')
-
-    // The key can be stored unencrypted when the OS keychain is unavailable.
-    // Saying "saved" and nothing else would leave the user believing a secret is
-    // protected when it is sitting in the clear on disk (CLAUDE.md §5.6).
-    if (stored.data.wantedEncryption && !stored.data.encrypted) {
-      toast(
-        'error',
-        'API key saved, but this system has no secure storage available, so it is stored unencrypted on disk.',
-      )
-      return
-    }
-    toast('success', 'API key saved')
-  }
-
-  async function checkKey() {
-    setBusy(true)
-    const result = await window.api.invoke('chatbot:testKey', {
-      ...(apiKeyDraft.trim() !== '' ? { apiKey: apiKeyDraft.trim() } : {}),
-    })
-    setBusy(false)
-    if (!result.ok) {
-      toast('error', result.error.userMessage)
-      return
-    }
-    if (result.data.valid) toast('success', 'The API key works.')
-    else toast('error', result.data.detail ?? 'The API key was rejected.')
   }
 
   if (!config) {
@@ -192,7 +137,7 @@ export default function AIBotPage() {
     <>
       <PageHeader
         title="AI Chatbot Configuration"
-        description="Configure automatic replies powered by OpenAI."
+        description="Configure automatic replies powered by OpenAI, Anthropic, Gemini or a compatible model."
         actions={
           <Button
             variant="primary"
@@ -206,39 +151,14 @@ export default function AIBotPage() {
       />
 
       <div className="flex flex-col gap-4 p-6">
-        <Panel title="OpenAI">
-          <Field
-            label="API key"
-            htmlFor="ai-key"
-            hint="Stored encrypted on this computer using the OS keychain, and sent nowhere except OpenAI."
-          >
-            <input
-              id="ai-key"
-              type="password"
-              data-testid="ai-key"
-              value={apiKeyDraft}
-              onChange={(e) => setApiKeyDraft(e.target.value)}
-              placeholder="sk-..."
-              className={INPUT}
-            />
-          </Field>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => void saveKey()}
-              disabled={busy}
-              data-testid="save-ai-key"
-            >
-              Save key
-            </Button>
-            <Button
-              onClick={() => void checkKey()}
-              disabled={busy}
-              data-testid="test-ai-key"
-            >
-              Test key
-            </Button>
-          </div>
-        </Panel>
+        {aiConfig && (
+          <AiProviderPanel
+            config={aiConfig}
+            keys={ai.data?.keys}
+            onChange={setAi}
+            onKeySaved={ai.refetch}
+          />
+        )}
 
         <Panel title="System Instructions (Bot Behavior & Motive)">
           <textarea
@@ -349,6 +269,8 @@ export default function AIBotPage() {
           </datalist>
         </Panel>
 
+        {aiConfig && <AiLimitsPanel config={aiConfig} onChange={setAi} />}
+
         <Panel title="Bot Personality & Goals">
           <div className="grid grid-cols-3 gap-3">
             <Field label="Primary Goal" htmlFor="goal">
@@ -439,13 +361,35 @@ export default function AIBotPage() {
             </Field>
           </div>
 
-          {config.escalationTrigger !== 'keywords' && (
+          {config.escalationTrigger === 'messages' && (
+            <NumberField
+              id="escalate-after-messages"
+              label="Hand over after this many bot replies in a chat"
+              hint="0 turns the trigger off"
+              min={0}
+              max={100}
+              value={config.escalateAfterMessages}
+              onChange={(v) => set('escalateAfterMessages', v)}
+            />
+          )}
+          {config.escalationTrigger === 'time' && (
+            <NumberField
+              id="escalate-after-minutes"
+              label="Hand over when a conversation has run this many minutes"
+              hint="0 turns the trigger off"
+              min={0}
+              max={10_080}
+              value={config.escalateAfterMinutes}
+              onChange={(v) => set('escalateAfterMinutes', v)}
+            />
+          )}
+          {config.escalationTrigger === 'confidence' && (
             <p
               className="rounded-card bg-status-warn-bg px-2 py-1.5 text-xs text-status-warn-fg"
               data-testid="trigger-unsupported"
             >
-              Only keyword triggers are active. OpenAI does not return a confidence score,
-              so the threshold below is stored but not enforced — see REQUIREMENTS §5.
+              No AI provider returns a confidence score, so this trigger is stored but not
+              enforced — see REQUIREMENTS §5.
             </p>
           )}
 
@@ -496,6 +440,8 @@ export default function AIBotPage() {
           />
           <p className="text-xs text-ink-subtle">Format: Q: Question | A: Answer</p>
         </Panel>
+
+        <AiUsagePanel />
 
         <div className="flex items-start gap-2 pb-4">
           <Bot className="mt-0.5 size-4 shrink-0 text-ink-subtle" aria-hidden />

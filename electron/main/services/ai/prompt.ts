@@ -1,7 +1,7 @@
 /**
  * Prompt construction for the auto-responder.
  *
- * Kept separate from the OpenAI client so it can be reasoned about — and
+ * Kept separate from the provider clients so it can be reasoned about — and
  * changed — without touching network code. Every field the AI Bot screen
  * exposes has to actually reach the model, or the settings are theatre.
  */
@@ -120,11 +120,12 @@ export function buildSystemPrompt(settings: ChatbotSettings): string {
 }
 
 /**
- * Whether an incoming message should go to a human instead of the model.
+ * Whether an incoming message's text should go to a human instead of the model.
  *
- * Only the keyword trigger is implemented. OpenAI does not return a confidence
- * score, so the prototype's threshold cannot be honoured directly — see
- * REQUIREMENTS §5 and assumption A13.
+ * The keyword trigger only; the message-count and elapsed-time triggers need
+ * the database and live in `escalation.ts`. No provider returns a confidence
+ * score, so the prototype's threshold cannot be honoured — see REQUIREMENTS §5
+ * and assumption A13.
  */
 export function shouldEscalate(body: string, settings: ChatbotSettings): boolean {
   if (settings.escalationTrigger !== 'keywords') return false
@@ -136,16 +137,4 @@ export function shouldEscalate(body: string, settings: ChatbotSettings): boolean
 
   const lower = body.toLowerCase()
   return keywords.some((k) => k.trim() !== '' && lower.includes(k.trim().toLowerCase()))
-}
-
-export function buildMessages(
-  settings: ChatbotSettings,
-  history: HistoryMessage[],
-  incoming: string,
-): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-  return [
-    { role: 'system', content: buildSystemPrompt(settings) },
-    ...history,
-    { role: 'user', content: incoming },
-  ]
 }

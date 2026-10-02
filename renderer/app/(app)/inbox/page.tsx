@@ -3,6 +3,11 @@
 import { formatDistanceToNow } from 'date-fns'
 import { MessageSquare } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import {
+  ChatFilterTabs,
+  type ChatFilter,
+} from '@renderer/components/inbox/chat-filter-tabs'
+import { DraftsPanel } from '@renderer/components/inbox/drafts-panel'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -36,6 +41,7 @@ export default function InboxPage() {
   const devices = useIpcQuery('device:list')
   const [deviceFilter, setDeviceFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<ChatFilter>('all')
   const [activeId, setActiveId] = useState<string>()
   const [draft, setDraft] = useState('')
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -48,6 +54,7 @@ export default function InboxPage() {
   const chats = useIpcQuery('chat:list', {
     ...(deviceFilter ? { deviceId: deviceFilter } : {}),
     ...(search ? { search } : {}),
+    filter,
     limit: 100,
   })
 
@@ -85,8 +92,10 @@ export default function InboxPage() {
   // ordering and unread badges stay correct.
   useIpcEvent('message:received', ({ chatId, message }) => {
     if (chatId === activeId) {
+      // Deduplicated by id: a reply this window sent itself can also arrive
+      // as an event (an approved AI draft, for one).
       setThread((current) =>
-        current.chatId === chatId
+        current.chatId === chatId && !current.messages.some((m) => m.id === message.id)
           ? { ...current, messages: [...current.messages, message as Message] }
           : current,
       )
@@ -94,6 +103,9 @@ export default function InboxPage() {
     }
     chats.refetch()
   })
+
+  // Escalation, drafts and bot state change server-side; badges follow.
+  useIpcEvent('chat:updated', () => chats.refetch())
 
   useIpcEvent('message:status', ({ messageId, status }) => {
     setThread((current) => ({
@@ -180,6 +192,7 @@ export default function InboxPage() {
                 </option>
               ))}
             </select>
+            <ChatFilterTabs value={filter} onChange={setFilter} />
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto" data-testid="chat-list">
@@ -210,7 +223,25 @@ export default function InboxPage() {
                       </span>
                     )}
                   </span>
-                  <span className="truncate text-xs text-ink-muted">{chat.phone}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-xs text-ink-muted">{chat.phone}</span>
+                    {chat.pendingDrafts > 0 && (
+                      <span
+                        className="shrink-0 rounded bg-status-warn-bg px-1.5 text-[10px] text-status-warn-fg"
+                        data-testid="drafts-badge"
+                      >
+                        {chat.pendingDrafts} draft{chat.pendingDrafts === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    {chat.optedOut && (
+                      <span
+                        className="shrink-0 rounded bg-status-idle-bg px-1.5 text-[10px] text-status-idle-fg"
+                        data-testid="opted-out-badge"
+                      >
+                        Opted out
+                      </span>
+                    )}
+                  </span>
                   <span className="truncate text-xs text-ink-subtle">
                     {chat.lastMessage ?? ''}
                   </span>
@@ -262,6 +293,8 @@ export default function InboxPage() {
                   </div>
                 )}
               </div>
+
+              <DraftsPanel chatId={active.id} />
 
               <div
                 className="min-h-0 flex-1 overflow-y-auto p-4"
