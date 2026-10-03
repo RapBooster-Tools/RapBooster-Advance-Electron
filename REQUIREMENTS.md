@@ -1,23 +1,25 @@
 # RapBooster Advance — What I still need from you
 
-> **Owner:** Punit &nbsp;|&nbsp; **Last trimmed:** 2026-07-28
+> **Owner:** Punit &nbsp;|&nbsp; **Last trimmed:** 2026-10-03
 >
 > This file holds **only open questions**. Anything you have already decided has been built and
-> moved to the decision log in [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) §7 — it is recorded
-> there with the reasoning, not repeated here.
+> moved to the decision log in [docs/DECISIONS.md](./docs/DECISIONS.md) — it is recorded there
+> with the reasoning, not repeated here. Product questions for future waves, each with a default
+> already in use, are in [docs/ROADMAP.md](./docs/ROADMAP.md#open-questions-for-the-next-waves).
 >
 > If an item does not apply, write `N/A` rather than leaving it blank, so "not applicable" is
 > distinguishable from "not yet answered".
 
 ## The short version
 
-| #   | What I need                                          | Where | If you skip it                                                |
-| --- | ---------------------------------------------------- | ----- | ------------------------------------------------------------- |
-| 1   | **License server API** (URL + request/reply)         | §1    | Nobody but you can activate the app                           |
-| 2   | **Code signing — Windows cert + Apple Developer ID** | §4    | SmartScreen warns on Windows; macOS refuses to open the app   |
-| 3   | **Branding** — icon, publisher name, support URL     | §2    | A placeholder icon ships and the installer shows no publisher |
-| 4   | **Update feed URL**                                  | §3    | No way to ship a fix after release                            |
-| 5   | **AI defaults** — model, caps                        | §5    | Sensible defaults stay; spend is uncapped                     |
+| #   | What I need                                      | Where | If you skip it                                                |
+| --- | ------------------------------------------------ | ----- | ------------------------------------------------------------- |
+| 1   | **License server API** (URL + request/reply)     | §1    | Nobody but you can activate the app                           |
+| 2   | **Windows code-signing certificate**             | §4    | SmartScreen warns on install; most people will not click past |
+| 3   | **Apple Developer ID + a Mac to build on**       | §4    | No macOS build can be produced or opened                      |
+| 4   | **Branding** — icon, publisher name, support URL | §2    | A placeholder icon ships and the installer shows no publisher |
+| 5   | **Update feed URL**                              | §3    | No way to ship a fix after release                            |
+| 6   | **GitHub push access** for the Claude GitHub App | §8    | Finished work stays in the session and cannot reach `main`    |
 
 **You can run and test everything today without any of these.** `npm run dev:mock` starts the
 app against a mock license server and a fake WhatsApp transport — activate with
@@ -137,15 +139,16 @@ Tell me how to distinguish them.
 
 ### 1.6 Policy
 
-| Question                                                                                                                     | Answer                                                                  |
-| ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| The mockup has an optional **"Remarks"** field on activation. Is it sent to the server? Under what field name?               | `___`                                                                   |
-| Does a license expire? How is expiry communicated?                                                                           | `___`                                                                   |
-| **Offline grace period** — how long may the app run without reaching the server before it locks? (0 = must always be online) | `___`                                                                   |
-| How often should the app silently re-validate? (e.g. every launch, every 24h)                                                | `___`                                                                   |
-| If re-validation fails with a network error (not a rejection), what should the app do?                                       | ⬜ Keep working until grace expires ⬜ Lock immediately ⬜ Other: `___` |
-| Should the user be able to deactivate their own machine from Settings?                                                       | ⬜ Yes ⬜ No                                                            |
-| Is there a trial mode?                                                                                                       | ⬜ No ⬜ Yes — how is it obtained/limited: `___`                        |
+| Question                                                                                                                                     | Answer                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| The mockup has an optional **"Remarks"** field on activation. Is it sent to the server? Under what field name?                               | `___`                                                                   |
+| Does a license expire? How is expiry communicated?                                                                                           | `___`                                                                   |
+| **Offline grace period** — how long may the app run without reaching the server before it locks? (0 = must always be online)                 | `___`                                                                   |
+| How often should the app silently re-validate? (e.g. every launch, every 24h)                                                                | `___`                                                                   |
+| If re-validation fails with a network error (not a rejection), what should the app do?                                                       | ⬜ Keep working until grace expires ⬜ Lock immediately ⬜ Other: `___` |
+| Should the user be able to deactivate their own machine from Settings?                                                                       | ⬜ Yes ⬜ No                                                            |
+| Is there a trial mode?                                                                                                                       | ⬜ No ⬜ Yes — how is it obtained/limited: `___`                        |
+| **Licensing tiers:** do different plans unlock different features or limits (e.g. number of devices)? Which, and how does the server say so? | ⬜ No, one plan ⬜ Yes: `___`                                           |
 
 ### 1.7 Anything else
 
@@ -220,21 +223,11 @@ refuses to open the app at all.
 
 ---
 
-## Section 5 — OpenAI / AI Bot ⬜
+## Section 5 — AI Bot ✅
 
-You chose OpenAI, with the end user pasting their own key.
-
-| Item                                                                                         | Value                                                                                          |
-| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Default model to preselect in Settings                                                       | `___`                                                                                          |
-| Models to offer in the dropdown                                                              | `___`                                                                                          |
-| Does a key ever ship with the app, or must every user supply one?                            | ⬜ User always supplies ⬜ Bundled fallback key (⚠ extractable from the app — not recommended) |
-| Max tokens per reply                                                                         | `___` (suggest 500)                                                                            |
-| Temperature default                                                                          | `___` (suggest 0.7)                                                                            |
-| Should the app cap spend? (e.g. max AI replies per day per device)                           | `___`                                                                                          |
-| Should conversation history be sent for context? How many prior messages?                    | `___` (suggest last 10)                                                                        |
-| What happens when the key is missing/invalid — silently skip auto-reply, or notify the user? | `___`                                                                                          |
-| Should AI replies be logged for the user to audit?                                           | ⬜ Yes ⬜ No                                                                                   |
+Answered. Users pick OpenAI, Anthropic, Gemini or any OpenAI-compatible service and paste
+their own key (D114); no key ships with the app. Spend is capped per device and per chat, and
+drafts can require approval (D127). The values in use are in §6.
 
 ---
 
@@ -249,17 +242,24 @@ writing over its value.
 | Sleep duration / after N messages   | 10 seconds after every 10                                           | `___`     |
 | Delay between group messages        | 2 seconds                                                           | `___`     |
 | Delay between group creations       | 2 seconds                                                           | `___`     |
-| Daily send cap per device           | Unlimited                                                           | `___`     |
+| Daily send cap per device           | 200 (D126)                                                          | `___`     |
 | Max devices sending at once         | 20                                                                  | `___`     |
 | Retry attempts per failed recipient | 2                                                                   | `___`     |
-| Pause outside business hours        | No                                                                  | `___`     |
+| Quiet hours (no automated sends)    | 21:00–09:00 local (D126)                                            | `___`     |
 | Duplicate handling on import        | Skip the duplicate                                                  | `___`     |
 | Inbox retention                     | Forever, media referenced on disk                                   | `___`     |
 | Campaign report format              | CSV, one row per recipient                                          | `___`     |
 | Dashboard cards                     | Contacts · connected devices · running+paused campaigns · templates | `___`     |
 | App UI language                     | English only                                                        | `___`     |
 | Crash reporting                     | Local logs only, nothing phones home                                | `___`     |
-| Baileys version                     | `7.0.0-rc13`, pinned exactly (npm's `latest`)                       | `___`     |
+| Baileys version                     | `7.0.0-rc14`, pinned exactly (D86)                                  | `___`     |
+| Opt-out words                       | STOP, UNSUBSCRIBE, बंद, with a confirmation reply (D127)            | `___`     |
+| Reply attribution window            | 72 hours                                                            | `___`     |
+| AI model per provider               | gpt-4o-mini · claude-haiku-4-5 · gemini-2.5-flash                   | `___`     |
+| AI reply settings                   | 500 max tokens, temperature 0.7, last 10 messages as context        | `___`     |
+| AI reply caps                       | 500 per device and 20 per chat, per day                             | `___`     |
+| AI approve-before-send              | Off                                                                 | `___`     |
+| Warmup for new numbers              | Off per device; when on, a 10-day ramp from 20 to 200 a day (D109)  | `___`     |
 | WhatsApp Business API integration   | Out of scope — Baileys only                                         | `___`     |
 
 ---
@@ -274,16 +274,39 @@ TODO
 
 ---
 
+## Section 8 — Accounts and access ⬜
+
+| Item                                                                                                 | Value              |
+| ---------------------------------------------------------------------------------------------------- | ------------------ |
+| Grant the **Claude GitHub App** push access to this repository, so each finished wave reaches `main` | ⬜ Done ⬜ Not yet |
+| Should anyone else get access to the repository or the release feed?                                 | `___`              |
+
+---
+
+## Section 9 — Product direction ⬜
+
+| Question                                                                                                                        | Answer                                    |
+| ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| **Team inbox:** several staff sharing one inbox on different computers. Not planned — the app is one user per install. Confirm? | ⬜ Confirmed, not needed ⬜ Needed: `___` |
+| Anything in [docs/ROADMAP.md](./docs/ROADMAP.md) "Candidates, not yet decided" you want next?                                   | `___`                                     |
+
+---
+
 ## Already decided — no action needed
 
-Recorded in [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) §7 with the full reasoning:
+Recorded in [docs/DECISIONS.md](./docs/DECISIONS.md) with the full reasoning:
 
-| Decision                                                                     | Tracker  |
-| ---------------------------------------------------------------------------- | -------- |
-| Windows **and macOS** distribution (Mac reinstated 2026-10-02)               | D66, D85 |
-| No default country code — every import asks, per file                        | D67      |
-| Link previews always on, fetched once per URL rather than once per message   | D68, D69 |
-| Real WhatsApp buttons and single-select lists, with a numbered-text fallback | D70–D72  |
+| Decision                                                                             | ID        |
+| ------------------------------------------------------------------------------------ | --------- |
+| Windows **and macOS** distribution                                                   | D85, D119 |
+| No default country code — every import asks, per file                                | D67       |
+| Link previews always on, fetched once per URL rather than once per message           | D68       |
+| Real WhatsApp buttons and single-select lists, with a numbered-text fallback         | D70–D72   |
+| The full marketing suite, including Spintax, Warmup, Group grabber and number checks | D79, D117 |
+| English-only interface                                                               | D118      |
+| Safety defaults: 200 a day, quiet hours 21:00–09:00                                  | D126      |
+| Every improvement-plan default (Q1–Q13)                                              | D127      |
+| Wave 3: design system and themes, help and tours, inbox and automation additions     | D122–D125 |
 
 ---
 

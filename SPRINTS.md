@@ -3,13 +3,15 @@
 Complete production plan for the Electron + Next.js + Baileys WhatsApp marketing desktop
 application.
 
-| Document                                 | Purpose                                                   |
-| ---------------------------------------- | --------------------------------------------------------- |
-| `SPRINTS.md` (this file)                 | Full technical specification and sprint breakdown         |
-| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) | Live status, decision log, deviations                     |
-| [CLAUDE.md](./CLAUDE.md)                 | Engineering rules for every coding session                |
-| [REQUIREMENTS.md](./REQUIREMENTS.md)     | Customer inputs — **blocks Sprint 1 until filled**        |
-| `design/`                                | Original HTML prototypes (reference only, never imported) |
+| Document                                 | Purpose                                                     |
+| ---------------------------------------- | ----------------------------------------------------------- |
+| `SPRINTS.md` (this file)                 | Full technical specification, sprint breakdown and test IDs |
+| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) | Live status, deviations, known issues, test history         |
+| [docs/TASKS.md](./docs/TASKS.md)         | Every task, done and remaining                              |
+| [docs/DECISIONS.md](./docs/DECISIONS.md) | Decision log (D1 onward)                                    |
+| [CLAUDE.md](./CLAUDE.md)                 | Engineering rules for every coding session                  |
+| [REQUIREMENTS.md](./REQUIREMENTS.md)     | Customer inputs still open                                  |
+| `design/`                                | Original HTML prototypes (reference only, never imported)   |
 
 ## Table of contents
 
@@ -27,15 +29,17 @@ application.
 12. [Sprint 4 — Inbox, AI bot, settings, dashboard, release](#12-sprint-4--inbox-ai-bot-settings-dashboard-release)
 13. [Cross-sprint definition of done](#13-cross-sprint-definition-of-done)
 14. [Dependency manifest](#14-dependency-manifest)
+15. [Sprint 5 — Marketing suite (D89)](#15-sprint-5--marketing-suite-d89)
 
 ---
 
 ## 1. Product definition
 
-RapBooster Advance is a licensed Windows desktop application for WhatsApp marketing.
-It connects multiple WhatsApp accounts through Baileys, stores everything in a local SQLite
-database scoped to the OS user, and runs bulk campaigns, group operations, a unified inbox, and
-an OpenAI-powered auto-responder.
+RapBooster Advance is a licensed Windows and macOS desktop application for WhatsApp
+marketing. It connects multiple WhatsApp accounts through Baileys, stores everything in a local
+SQLite database scoped to the OS user, and runs bulk campaigns, group operations, a unified
+inbox, and an AI auto-responder. Sprints 1–4 built the prototype's nine screens (§2); Sprint 5
+(§15) added the marketing suite the customer chose on 2026-10-02 (D117).
 
 ### 1.1 Locked decisions
 
@@ -43,15 +47,15 @@ an OpenAI-powered auto-responder.
 | ------------------- | ------------------------------------------------------------------------------------------ |
 | Shell               | Electron — main + preload + renderer + `wa-service` utility process                        |
 | UI                  | Next.js App Router, `output: 'export'`, client-only, Tailwind + shadcn/ui                  |
-| WhatsApp            | Baileys, version per [REQUIREMENTS §7.6](./REQUIREMENTS.md) — pinned exactly, no `^`       |
+| WhatsApp            | Baileys `7.0.0-rc14`, pinned exactly, no `^` (D86)                                         |
 | Concurrency         | Up to **20 simultaneously connected devices**                                              |
 | Database            | SQLite via **Prisma + better-sqlite3**, one DB per OS user under `app.getPath('userData')` |
 | Licensing           | Remote license server (customer-owned): activation gate, conflict transfer, revalidation   |
-| AI                  | OpenAI; the end user supplies their own API key in Settings                                |
+| AI                  | OpenAI, Anthropic, Gemini or OpenAI-compatible; the end user supplies their own key (D114) |
 | Personalization     | `{{Field}}` merge tags resolved from contact-list columns                                  |
 | Campaign durability | Per-recipient queue rows; crash-safe resume; bounded duplicate guarantee                   |
 | Pairing             | QR code **and** 8-digit pairing code                                                       |
-| Platforms           | Windows (NSIS), signed — macOS dropped on 2026-07-28 (tracker D66)                         |
+| Platforms           | Windows (NSIS) and macOS (dmg + zip, arm64 + x64), both signed (D85, D119)                 |
 | Updates             | `electron-updater` against a customer-hosted feed                                          |
 | Scale target        | 50,000 contacts · 20 devices · 100,000 queued recipients                                   |
 | Testing             | Playwright E2E through `_electron`, run at the end of every sprint                         |
@@ -59,12 +63,15 @@ an OpenAI-powered auto-responder.
 
 ### 1.2 Explicitly out of scope
 
-Confirmed with the customer: **Number Filter / WhatsApp validity checker, Group Grabber /
-member extractor, Account Warmup, and Spintax are not being built** — none appear in the
-prototype. Also out: proxy support, tags/segments, unsubscribe handling, delivery-analytics
-dashboards, app UI translation, telemetry.
+Still out: proxy support, app UI translation (English only, D118), telemetry, a multi-user
+team inbox, and the WhatsApp Business (Cloud) API.
 
-Anything outside §2 requires an explicit scope change recorded in the tracker's deviations log.
+**Revised 2026-10-02.** The original list also excluded Number Filter, Group Grabber, Account
+Warmup, Spintax, tags and segments, unsubscribe handling and delivery analytics. The customer
+brought all of them into scope (D79, D117); they are specified in §15.
+
+Anything outside §2 and §15 requires an explicit scope change recorded in
+[docs/DECISIONS.md](./docs/DECISIONS.md) and the tracker's deviations log.
 
 ---
 
@@ -72,7 +79,8 @@ Anything outside §2 requires an explicit scope change recorded in the tracker's
 
 Extracted from `design/Application Prototype.dc.html`, `Screen 1 - License Activation.dc.html`
 and `Screen 2 - License Conflict.dc.html`. **This table is the completeness contract** — every
-field listed here must exist in the shipped app.
+field listed here must exist in the shipped app. The three screens added in Sprint 5
+(Sequences, Status & Channels, Automation) and the features added to these screens are in §15.
 
 ### 2.0 License Activation — Sprint 1
 
@@ -223,7 +231,8 @@ About & Updates.
 │  app lifecycle · BrowserWindow · single-instance lock        │
 │  IPC router (zod-validated) · Prisma client (SOLE DB WRITER) │
 │  LicenseService · SettingsService · safeStorage · updater    │
-│  logger · wa-service supervisor                              │
+│  campaign engine · group runner · AI responder               │
+│  inbound pipeline · scheduler hub · logger · supervisor      │
 └──────────┬───────────────────────────────┬───────────────────┘
            │ contextBridge via preload     │ MessagePort
            ▼                               ▼
@@ -231,10 +240,9 @@ About & Updates.
 │ RENDERER (sandboxed)       │  │ WA-SERVICE (utilityProcess)  │
 │ Next.js static export      │  │ Baileys session manager ×20  │
 │ React 19 · Tailwind        │  │ throttle scheduler           │
-│ no Node · no fs · no DB    │  │ campaign worker pool         │
-│ all data via window.api    │  │ group job runner             │
-└────────────────────────────┘  │ OpenAI auto-reply worker     │
-                                └──────────────────────────────┘
+│ no Node · no fs · no DB    │  │ transport (Baileys | mock)   │
+│ all data via window.api    │  │ link-preview cache           │
+└────────────────────────────┘  └──────────────────────────────┘
 ```
 
 **Why `wa-service` is a separate process.** Twenty concurrent Baileys sockets perform
@@ -751,7 +759,9 @@ trade-off — no SQL filtering on custom fields — is acceptable because no scr
 
 ## 5. IPC contract
 
-`shared/ipc.ts` is the single source of truth, imported by main, preload and renderer. Each
+`shared/ipc.ts` is the single source of truth, imported by main, preload and renderer. Since
+Sprint 5 the channel definitions for newer domains live in `shared/contract/*.ts` and are spread
+into the one `ipcContract` there (D89). Each
 channel declares a zod request schema and a zod response schema; the router validates **both
 directions**, so a malformed payload fails at the boundary rather than deep inside a service.
 
@@ -1046,8 +1056,8 @@ shipping. Deliverable: a throwaway packaged build that opens a DB at `userData`,
 writes and reads.
 
 If it fails, fall back to **Drizzle ORM** on the same `better-sqlite3` driver — identical
-schema and query surface, no other layer changes. Record the outcome in the tracker's decision
-log either way. Do not switch silently.
+schema and query surface, no other layer changes. Record the outcome in the decision
+log (`docs/DECISIONS.md`) either way. Do not switch silently.
 
 #### T1.2 — Project scaffold
 
@@ -1599,7 +1609,8 @@ A sprint is complete only when **all** of the following hold:
 5. No `TODO`, `FIXME`, `any` at an IPC boundary, or commented-out code in the diff.
 6. Every new error path is typed, logged, and surfaced to the user.
 7. Graph refreshed (`graphify . --update`) and `GRAPH_REPORT.md` committed.
-8. `SPRINT-TRACKER.md` updated with status, test results, decisions and deviations.
+8. `SPRINT-TRACKER.md` updated with status, test results, deviations and known issues; tasks
+   ticked in `docs/TASKS.md`; decisions recorded in `docs/DECISIONS.md`.
 9. Committed and pushed to `main`.
 
 ---
@@ -1637,3 +1648,217 @@ time in Sprint 1; nothing floats on `^`.
 Deliberately **not** used: any Baileys fork or wrapper (`baileys-pro`, `baileys-antiban`,
 `mahiru-baileys`) — the anti-ban pacing in §6.1 is ours and auditable, and forks add supply-chain
 risk to the most security-sensitive dependency in the app.
+
+---
+
+## 15. Sprint 5 — Marketing suite (D89)
+
+**Goal:** every Baileys-capable marketing feature the customer chose on 2026-10-02 (D79,
+D117), built on one shared foundation and then as nine parallel slices. Merged 2026-10-03.
+Status per task: [docs/TASKS.md](./docs/TASKS.md); decisions D89–D116.
+
+### 15.1 Features
+
+| Area             | Features                                                                                                                                                                                                            | Screen                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Audience         | Tags and bulk tagging · opt-out list with STOP/START keywords · verify numbers on WhatsApp · Google Sheets import                                                                                                   | Contacts                     |
+| Campaigns        | Tag include/exclude audiences · skip opted-out and not-on-WhatsApp numbers · quiet-hours parking · delivered/read/replied analytics with reply attribution · duplicate · max devices sending at once                | Campaigns                    |
+| Rich messages    | Voice note, sticker, location, contact card, poll, event and product templates · spintax · inbox attach menu                                                                                                        | Templates, Inbox             |
+| Groups           | Invite links · join by link · group settings · add/remove/promote members · join requests · member grabber (export to a list) · communities · bulk create with settings                                             | WA Groups                    |
+| Broadcast        | Status updates (text, image) and WhatsApp Channels, now or scheduled                                                                                                                                                | Status & Channels            |
+| Automation       | Keyword auto-replies · signed webhooks · call auto-reject                                                                                                                                                           | Automation                   |
+| Sequences        | Drip sequences: up to 20 timed steps, enrollment from lists and tags, stop on reply                                                                                                                                 | Sequences                    |
+| AI               | OpenAI, Anthropic, Gemini, OpenAI-compatible · daily caps · usage · approve-before-send drafts · coalescing · message and time escalation triggers                                                                  | AI Bot, Inbox                |
+| Devices & safety | Base sending policy on every device · 200/day cap and 21:00–09:00 quiet hours by default · warmup ramp and conversations · health breaker · Business labels and catalog · typing simulation · 7-day dashboard chart | Devices, Settings, Dashboard |
+
+Three screens were added — **Sequences**, **Status & Channels** and **Automation** — for 12
+in total.
+
+### 15.2 Architecture additions
+
+- **Schema:** 16 tables (`Tag`, `ContactTag`, `Suppression`, `CampaignTag`, `Channel`,
+  `ScheduledPost`, `KeywordRule`, `KeywordRuleHit`, `Webhook`, `WebhookDelivery`, `Sequence`,
+  `SequenceStep`, `SequenceEnrollment`, `AiUsage`, `AiDraft`, `CallEvent`) and new columns on
+  existing ones, in a hand-written migration guarded by `npm run check:migrations` (D90).
+- **IPC:** new domains in `shared/contract/{audience,automation,broadcast,groups,messaging,common}.ts`,
+  spread into the one `ipcContract` in `shared/ipc.ts`.
+- **Inbound pipeline** (`services/inbound.ts`) and **scheduler hub** (`services/scheduler.ts`)
+  with a fixed order and a single clock (D89). New automation joins one of them.
+- **Sending policy** (`services/sending-policy.ts`) pushed into the throttle for every device;
+  `manual` sends from a person in the inbox are exempt from quiet hours, the cap and typing.
+- **Dependency added:** `audio-decode`, so voice notes carry a waveform (D91).
+
+### 15.3 Acceptance criteria
+
+- No automated send of any kind bypasses the throttle, the daily cap or quiet hours.
+- An opted-out number is never messaged by a campaign, sequence, status, group add, keyword
+  rule or the AI.
+- Every new time-driven job reads its state from SQLite and survives a restart.
+- The daily counter is the same number whichever feature sent the message (D94).
+- Every earlier suite still passes.
+
+### 15.4 E2E tests
+
+Spec files in `tests/e2e/`; the IDs below are the test titles' prefixes.
+
+#### Audience — `audience.spec.ts`
+
+| ID    | Test                                                                                     |
+| ----- | ---------------------------------------------------------------------------------------- |
+| E5.1  | Tags are created, listed with counts, renamed and recoloured; names are unique           |
+| E5.2  | Assigning by contact ids skips existing pairs; unassign removes them                     |
+| E5.3  | A tag assigned to a whole list reaches every contact; filter by tag; delete cascades     |
+| E5.4  | Opt-outs are normalized, de-duplicated, searchable, paged and removable                  |
+| E5.5  | Opt-outs import from CSV (Mobile column) and TXT (with a dial prefix)                    |
+| E5.6  | The opt-out list exports to CSV under `userData/exports`                                 |
+| E5.7  | Opt-out keyword configuration has safe defaults and round-trips                          |
+| E5.8  | A Google Sheet previews from its share link, honouring the tab in `#gid=`                |
+| E5.9  | A sheet imports through the CSV pipeline: mapping, dial prefix, duplicates, invalid rows |
+| E5.10 | A sheet that is not shared gets a clear instruction; other links are refused             |
+| E5.11 | STOP suppresses the number, flags the chat and sends the confirmation                    |
+| E5.12 | START re-subscribes a number that opted out by keyword                                   |
+| E5.13 | Keywords match whole messages in any case; sentences and manual opt-outs are left alone  |
+| E5.14 | Verifying a list marks numbers on and off WhatsApp, with live progress                   |
+| E5.15 | A checked list is not re-checked unless asked; a disconnected device is refused          |
+| E5.16 | UI: tags managed, applied to selected rows and filtered on                               |
+| E5.17 | UI: the opt-outs view adds, searches, removes and configures                             |
+| E5.18 | UI: a Google Sheet imports through the import dialog                                     |
+| E5.19 | UI: "Verify numbers" shows live progress and status badges                               |
+
+#### Campaigns — `campaign-suite.spec.ts`
+
+| ID    | Test                                                                               |
+| ----- | ---------------------------------------------------------------------------------- |
+| E5.20 | Audience is lists ∪ included tags − excluded tags, one message per number          |
+| E5.21 | Opted-out numbers are queued as skipped and never sent                             |
+| E5.22 | Number check skips numbers not on WhatsApp and remembers the result                |
+| E5.23 | Number check covers a queue many check batches long                                |
+| E5.24 | Quiet hours park a campaign without charging attempts, and it resumes after        |
+| E5.25 | Quiet hours starting mid-run park the rest; the resumed run sends each number once |
+| E5.26 | A campaign paused while parked stays paused when quiet hours end                   |
+| E5.27 | The health breaker pauses a failing device, and the pause survives a restart       |
+| E5.28 | Receipts and replies land on the campaign, its report and its card                 |
+| E5.29 | Dashboard analytics for today agree with the campaign counters                     |
+| E5.30 | A reply is credited to the most recent campaign that messaged the number           |
+| E5.31 | Duplicate keeps audience and pacing and starts as an empty draft                   |
+| E5.32 | With `maxConcurrentDevices = 1` one device finishes before the next starts         |
+| E5.33 | UI: the dialog creates a tag-audience campaign with number checking                |
+| E5.34 | Changing a sending setting mid-run keeps the campaign's own pacing                 |
+
+#### Rich messages — `rich-messages.spec.ts`
+
+| ID    | Test                                                               |
+| ----- | ------------------------------------------------------------------ |
+| E5.40 | One template of each rich type saves and lists with its payload    |
+| E5.41 | Invalid rich templates are rejected with a reason                  |
+| E5.42 | A campaign with a poll template sends a real poll                  |
+| E5.43 | Spintax gives recipients different wording; merge tags stay intact |
+| E5.44 | Every rich template type puts its own kind on the wire             |
+| E5.45 | Preview renders one spintax variant and reports unresolved tags    |
+| E5.46 | Inbox rich sends go out as manual sends, even in quiet hours       |
+| E5.47 | UI: a poll template built in the editor                            |
+| E5.48 | UI: location and event editors validate and save                   |
+| E5.49 | UI: the product picker degrades gracefully without a catalog       |
+| E5.50 | UI: the inbox attach menu sends a poll into the open chat          |
+
+#### Groups — `group-tools.spec.ts`
+
+| ID    | Test                                                                               |
+| ----- | ---------------------------------------------------------------------------------- |
+| E5.60 | Invite link is shown, revoking changes the code, non-admins are refused            |
+| E5.61 | Joining by link or bare code adds the group; junk is refused                       |
+| E5.62 | Settings toggles reach WhatsApp and persist on the group                           |
+| E5.63 | Adding members reports each number: added, not on WhatsApp, opted out              |
+| E5.64 | Remove and promote act on WhatsApp and refresh the count                           |
+| E5.65 | Approving a join request adds the member; rejecting removes the request            |
+| E5.66 | Exporting members of two groups builds a de-duplicated list without our own number |
+| E5.67 | Communities: create, link, list, create a group inside, unlink                     |
+| E5.68 | Bulk create applies admins-only, join approval and description                     |
+| E5.69 | UI: the Manage dialog drives invite, settings, members and join requests           |
+| E5.70 | UI: join, export and communities through the Groups screen                         |
+
+E5.71–E5.79 are unused.
+
+#### Broadcast — `broadcast.spec.ts`
+
+| ID    | Test                                                                 |
+| ----- | -------------------------------------------------------------------- |
+| E5.80 | A text status reaches the chosen lists and never a suppressed number |
+| E5.81 | "Everyone" covers every contact on file, still without opt-outs      |
+| E5.82 | A scheduled post waits for its time, then posts and pushes events    |
+| E5.83 | A created channel is owned, has an invite link, and can be posted to |
+| E5.84 | Following by link, code or JID stores a subscriber, once             |
+| E5.85 | Only a scheduled post can be cancelled                               |
+| E5.86 | Invalid posts and invites are refused with a readable reason         |
+| E5.87 | An image status is copied into the media store and posted from there |
+| E5.88 | A post for a disconnected device waits instead of failing            |
+| E5.89 | Removing a channel forgets it locally only                           |
+| E5.90 | UI: posting a text status from the page                              |
+| E5.91 | UI: creating a channel and following one from the Channels tab       |
+
+#### Automation — `automation.spec.ts`
+
+| ID    | Test                                                                          |
+| ----- | ----------------------------------------------------------------------------- |
+| E6.1  | Rule CRUD; a rule needs exactly one of reply text or template                 |
+| E6.2  | `rule:test` applies whole-word matching, match types, priority and devices    |
+| E6.3  | An inbound "price" gets the rule reply, recorded and marked read              |
+| E6.4  | A rule reply means the AI is never consulted; an unmatched message reaches it |
+| E6.5  | The cooldown stops a second reply to the same chat                            |
+| E6.6  | A template rule sends the template with merge tags resolved                   |
+| E6.7  | A disabled rule is ignored                                                    |
+| E6.8  | A rule scoped to other devices does not answer on this one                    |
+| E6.9  | A chat opted out of auto-replies is left to a human                           |
+| E6.10 | In quiet hours a matched rule parks: nothing sent, no hit, no AI              |
+| E6.11 | UI: a rule created through the screen answers the "Test a message" box        |
+| E6.12 | Webhook CRUD: the secret is returned once and never listed                    |
+| E6.13 | `message.received` is delivered with a valid HMAC signature                   |
+| E6.14 | A failed delivery retries with backoff and ends delivered                     |
+| E6.15 | "Send test" reports exactly what the endpoint answered                        |
+| E6.16 | A disabled webhook receives nothing                                           |
+| E6.17 | With auto-reject off, a call is recorded and left ringing                     |
+| E6.18 | Auto-reject rejects the call, messages the caller and fires `call.rejected`   |
+| E6.19 | UI: Webhooks and Calls tabs — secret shown once, settings saved, calls listed |
+
+#### Sequences — `sequences.spec.ts`
+
+| ID    | Test                                                        |
+| ----- | ----------------------------------------------------------- |
+| E6.20 | A two-step sequence sends both steps in order and completes |
+| E6.21 | A reply stops the sequence before the next step             |
+| E6.22 | With stop-on-reply off, a reply does not stop the sequence  |
+| E6.23 | A paused sequence sends nothing until it is resumed         |
+| E6.24 | Opted-out and duplicate numbers are skipped at enrollment   |
+| E6.25 | Unenrolled contacts are stopped and receive nothing         |
+| E6.26 | An enrollment waits while its device is offline             |
+| E6.27 | UI: create, enroll and inspect a sequence                   |
+
+#### AI — `ai-suite.spec.ts`
+
+| ID            | Test                                                                     |
+| ------------- | ------------------------------------------------------------------------ |
+| E6.40         | Anthropic answers with the system prompt as a top-level field            |
+| E6.41 + E6.42 | Gemini answers with `systemInstruction` and a header key; usage recorded |
+| E6.43         | The per-chat daily cap stops the second reply and says so once           |
+| E6.44 + E6.45 | Approve-before-send drafts; approve sends, discard does not              |
+| E6.46         | A quick burst of messages gets one model call that reads all of them     |
+| E6.47         | The "after N messages" trigger escalates instead of calling the model    |
+| E6.48         | Quiet hours hold the reply, and it sends once they end                   |
+| E6.49         | UI: the inbox Drafts filter, badge and Edit & approve                    |
+| E6.50         | Provider configuration: defaults, key status, validation and the screen  |
+
+#### Devices and safety — `devices-suite.spec.ts`
+
+| ID    | Test                                                                       |
+| ----- | -------------------------------------------------------------------------- |
+| E6.60 | Warmup starts at day 1 and its cap stops a campaign through the throttle   |
+| E6.61 | Turning warmup off restores the global cap and forgets the start date      |
+| E6.62 | A health pause shows on the Devices screen and "Resume now" clears it      |
+| E6.63 | A Business account is detected and its catalog lists                       |
+| E6.64 | `catalog:list` refuses a regular account and a disconnected device clearly |
+| E6.65 | WhatsApp Business labels mirror into tags on every matching contact        |
+| E6.66 | Typing simulation shows "composing" before an automated send               |
+| E6.67 | Two warmup devices hold a short conversation with each other only          |
+| E6.68 | Sending & safety settings round-trip and warn on an unlimited cap          |
+| E6.69 | The dashboard charts seven days and its safety notice dismisses for good   |
+| E6.70 | UI: toggling warmup on the Devices screen shows the ramp live              |
