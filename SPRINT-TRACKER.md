@@ -19,18 +19,19 @@ Last updated: **2026-10-03**
 
 ## 1. Status dashboard
 
-| Milestone                          | Scope                                                       | Status         | Dates         | E2E (pass / fail / skip) | Commit              |
-| ---------------------------------- | ----------------------------------------------------------- | -------------- | ------------- | ------------------------ | ------------------- |
-| Sprint 0                           | Documentation                                               | 🟢 Complete    | 07-27         | n/a                      | `9968d08`           |
-| Sprint 1                           | Foundation · licensing · shell                              | 🟢 Complete    | 07-27 → 07-28 | 28 / 0 / 0               | `f095b16`           |
-| Sprint 2                           | Devices · contacts · templates                              | 🟢 Complete    | 07-28         | 49 / 0 / 0               | `a51bff7`           |
-| Sprint 3                           | Campaign engine · groups                                    | 🟢 Complete    | 07-28         | +16, all pass            | `922b14a`           |
-| Sprint 4                           | Inbox · AI · settings · dashboard (release proof → Release) | 🟢 Complete    | 07-28         | 99 / 0 / 1               | —                   |
-| Hardening pass                     | Four defects, audit, graph                                  | 🟢 Complete    | 10-02         | 101 / 2 env / 1          | `da61f68`           |
-| Dependencies + macOS               | Latest stable deps, Mac target, in-repo memory              | 🟢 Complete    | 10-02         | 101 / 2 env / 1          | `c0f5759`           |
-| **Wave D89 — marketing suite**     | Foundation + nine feature slices (SPRINTS §15)              | 🟢 Complete    | 10-02 → 10-03 | 214 / 4 → 2 env / 1      | `e205734` `9981076` |
-| **Wave 3 — ease of use and inbox** | Design system, help, inbox, automation builder (D122–D125)  | 🟡 In progress | 10-03 →       | —                        | —                   |
-| Release                            | Signed builds, update feed, real license API                | 🔴 Blocked     | —             | —                        | —                   |
+| Milestone                             | Scope                                                                          | Status         | Dates         | E2E (pass / fail / skip) | Commit              |
+| ------------------------------------- | ------------------------------------------------------------------------------ | -------------- | ------------- | ------------------------ | ------------------- |
+| Sprint 0                              | Documentation                                                                  | 🟢 Complete    | 07-27         | n/a                      | `9968d08`           |
+| Sprint 1                              | Foundation · licensing · shell                                                 | 🟢 Complete    | 07-27 → 07-28 | 28 / 0 / 0               | `f095b16`           |
+| Sprint 2                              | Devices · contacts · templates                                                 | 🟢 Complete    | 07-28         | 49 / 0 / 0               | `a51bff7`           |
+| Sprint 3                              | Campaign engine · groups                                                       | 🟢 Complete    | 07-28         | +16, all pass            | `922b14a`           |
+| Sprint 4                              | Inbox · AI · settings · dashboard (release proof → Release)                    | 🟢 Complete    | 07-28         | 99 / 0 / 1               | —                   |
+| Hardening pass                        | Four defects, audit, graph                                                     | 🟢 Complete    | 10-02         | 101 / 2 env / 1          | `da61f68`           |
+| Dependencies + macOS                  | Latest stable deps, Mac target, in-repo memory                                 | 🟢 Complete    | 10-02         | 101 / 2 env / 1          | `c0f5759`           |
+| **Wave D89 — marketing suite**        | Foundation + nine feature slices (SPRINTS §15)                                 | 🟢 Complete    | 10-02 → 10-03 | 214 / 4 → 2 env / 1      | `e205734` `9981076` |
+| **Wave 3 — workspace and automation** | Design system, inbox tools, flows, imports, desktop, LID numbers (SPRINTS §16) | 🟢 Complete    | 10-03         | 291 / 2 env / 1, then +7 | `a1a4e73` `0e9dddb` |
+| Wave 4 — help system                  | Setup wizard, help on every screen, tours, Help Center (D123)                  | 🟡 In progress | 10-03 →       | —                        | —                   |
+| Release                               | Signed builds, update feed, real license API                                   | 🔴 Blocked     | —             | —                        | —                   |
 
 All dates 2026. **Legend:** ⬜ Not started · 🟡 In progress · 🟢 Complete · 🔴 Blocked ·
 ⚪ Deferred. "env" failures are E1.2 and E4.17, which need an OS keyring (K11). Per-task status
@@ -38,16 +39,17 @@ is in [docs/TASKS.md](./docs/TASKS.md).
 
 ## 2. Current status
 
-> **2026-10-03.** The app is feature-complete for everything decided up to the D89 wave: 12
-> screens, 20 devices, campaigns with tag audiences, quiet hours, warmup and a health breaker,
-> rich messages and spintax, group admin tools and communities, status and Channels, keyword
-> replies, webhooks, drip sequences, and an AI bot on four providers with drafts and caps.
-> The merged tree passes 214 of 219 E2E tests; two of the five were fixed in `9981076` (30/30
-> on re-run), two need an OS keyring the cloud container lacks (K11), one is the PERF-gated
-> skip.
+> **2026-10-03.** Wave 3 is merged (`a1a4e73`): a light/dark design system, inbox quick
+> replies, a contact panel with notes and scheduled messages, visual chatbot flows, welcome
+> and away messages, Excel and vCard import, a WhatsApp contacts grabber that covers chats,
+> file pickers everywhere, and desktop notifications with a tray and background running
+> (SPRINTS §16, D130–D149). Follow-ups fixed two real bugs: a LID's digits were shown and
+> used as a phone number (D129), and a bundle change left every device unable to connect
+> (D150). The merged tree passes 291 of 294 E2E tests: two need an OS keyring (K11), one is
+> the PERF-gated skip; the 7 LID tests pass.
 >
-> **Now:** Wave 3 (D122–D125) — the design system is being built first, then inbox, automation
-> builder, imports and help, in parallel worktrees ([TASKS §13](./docs/TASKS.md#13-wave-3--in-progress)).
+> **Now:** Wave 4, the help system — setup wizard, help on every screen, guided tours and the
+> Help Center (D123, [TASKS §13](./docs/TASKS.md#13-wave-3--workspace-automation-help)).
 >
 > **Blocked on the customer, and the only thing between this and a release:** the license
 > server API, a Windows signing certificate, an Apple Developer ID with a Mac build machine,
@@ -55,8 +57,10 @@ is in [docs/TASKS.md](./docs/TASKS.md).
 > ([TASKS §15](./docs/TASKS.md#15-blocked-on-the-customer), K6). Until then `npm run dev:mock`
 > runs the whole product with no license server and no real WhatsApp account.
 >
-> **Not yet re-done for the D89 wave:** the packaged smoke test on Windows and macOS (T-1605),
-> the code-graph refresh (T-1421) and an `npm audit` re-triage (T-1422).
+> **Not yet re-done since the D89 wave:** the packaged smoke test on Windows and macOS (T-1605;
+> the self-test now checks the wa-service entry, the `.xlsx` worker and the tray icon, K24), the
+> code-graph refresh (T-1421) and an `npm audit` re-triage (T-1422). Tray, notifications and
+> tapped WhatsApp buttons still need a real Windows and macOS machine (K25).
 
 ## 3. Measured performance
 
@@ -73,49 +77,61 @@ total.
 | 2,000 contacts imported                       | 548 MB                              |
 | Memory over 40 s of a running campaign        | 531 → 489 MB (**falls**; no leak)   |
 
-Not re-measured since the D89 wave added warmup, sequences and the scheduler hub.
+Not re-measured since the D89 wave added warmup, sequences and the scheduler hub, or since
+Wave 3. One Wave 3 figure: during a 50,000-row `.xlsx` import the worst IPC round trip is
+0.73 s (E8.48, D139).
 
 ## 4. Deviations log
 
 Anything built differently from [SPRINTS.md](./SPRINTS.md), and whether the spec was updated.
 
-| #   | Date       | Deviation                                                                                                                                                  | Why       | Spec updated?                             |
-| --- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------- |
-| DV1 | 2026-07-28 | Hand-written UI primitives instead of the shadcn CLI (T1.6)                                                                                                | D20       | No — Wave 3 design system replaces both   |
-| DV2 | 2026-07-28 | Throttle in `wa-service`, campaign worker loop in main (§3.1 put both in `wa-service`)                                                                     | D42       | Yes — §3.1 diagram, 2026-10-03            |
-| DV3 | 2026-07-28 | Per-recipient view is a dialog, not a `/campaigns/[id]` route (T3.5)                                                                                       | D48       | No                                        |
-| DV4 | 2026-10-02 | IPC contract split by domain into `shared/contract/*.ts`, assembled into the one `ipcContract` in `shared/ipc.ts`                                          | D89       | Yes — §15 and CLAUDE.md §2.2              |
-| DV5 | 2026-10-02 | Scope expanded beyond §1.2: opt-outs, analytics, tags (D79), then Spintax, Warmup, Group grabber, number filter and the rest of the marketing suite (D117) | D79, D117 | Yes — §1.2 revised, Sprint 5 added as §15 |
-| DV6 | 2026-10-02 | macOS is a target again; §1.1 had recorded it as dropped                                                                                                   | D85       | Yes — §1.1                                |
+| #   | Date       | Deviation                                                                                                                                                  | Why                                                           | Spec updated?                                |
+| --- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------- |
+| DV1 | 2026-07-28 | Hand-written UI primitives instead of the shadcn CLI (T1.6)                                                                                                | D20, D145                                                     | Yes — §7 now points to docs/DESIGN-SYSTEM.md |
+| DV2 | 2026-07-28 | Throttle in `wa-service`, campaign worker loop in main (§3.1 put both in `wa-service`)                                                                     | D42                                                           | Yes — §3.1 diagram, 2026-10-03               |
+| DV3 | 2026-07-28 | Per-recipient view is a dialog, not a `/campaigns/[id]` route (T3.5)                                                                                       | D48                                                           | No                                           |
+| DV4 | 2026-10-02 | IPC contract split by domain into `shared/contract/*.ts`, assembled into the one `ipcContract` in `shared/ipc.ts`                                          | D89                                                           | Yes — §15 and CLAUDE.md §2.2                 |
+| DV5 | 2026-10-02 | Scope expanded beyond §1.2: opt-outs, analytics, tags (D79), then Spintax, Warmup, Group grabber, number filter and the rest of the marketing suite (D117) | D79, D117                                                     | Yes — §1.2 revised, Sprint 5 added as §15    |
+| DV6 | 2026-10-02 | macOS is a target again; §1.1 had recorded it as dropped                                                                                                   | D85                                                           | Yes — §1.1                                   |
+| DV7 | 2026-10-03 | Desktop preferences are `app.<field>` rows in the `Setting` table, cached in memory, rather than a table or file of their own                              | D143                                                          | Yes — §16.2                                  |
+| DV8 | 2026-10-03 | Automation lists Chatbot flows first but still opens on Keyword rules                                                                                      | The default is unchanged; existing users and specs land on it | Yes — §16.1                                  |
+| DV9 | 2026-10-03 | Light, dark and System themes and a collapsible sidebar; §7 specified light only and a fixed 200px sidebar                                                 | D122, D145                                                    | Yes — §7 note                                |
 
 ## 5. Known issues
 
 Carried forward until fixed or explicitly accepted with a reason. Open items have a task in
 [docs/TASKS.md](./docs/TASKS.md).
 
-| #   | Found | Issue                                                                                                              | Severity        | Status and next step                                                                           |
-| --- | ----- | ------------------------------------------------------------------------------------------------------------------ | --------------- | ---------------------------------------------------------------------------------------------- |
-| K1  | S3    | A message in flight during a crash may send twice — at most one per device per crash                               | Accepted        | SPRINTS §6.4. WhatsApp has no dedup primitive. Sequences share the bound (D99)                 |
-| K2  | S1    | ~~Spike-only `SpikeProbe` table in the baseline migration~~                                                        | ✅ Resolved     | Regenerated in T1.4; E1.13 asserts it is absent                                                |
-| K3  | S1    | Builds are unsigned (the default-icon warning is fixed)                                                            | Blocked on user | T-1502, T-1503                                                                                 |
-| K4  | S3    | Intermittent E2E launch timeouts, ~1 per 2 full runs, always a launch wait                                         | Environmental   | Passes in isolation. Deliberately not masked with retries. Re-check on a quieter machine or CI |
-| K5  | S4    | ~~`settings:get/set` had no handler~~                                                                              | ✅ Resolved     | Found by E4.17; implemented in T4.3                                                            |
-| K6  | S4    | The release pipeline has never run end to end: no signed installer, no update installed                            | Blocked on user | Config complete, packaged build green. T-1602–T-1604                                           |
-| K7  | S4    | `npm audit`: 4 high under `--omit=dev`, all in the Prisma CLI (dev-only, verified absent from `app.asar`)          | Accepted        | sharp, js-yaml, fast-uri fixed (D82). Re-triage after the D89 wave: T-1422                     |
-| K8  | S4    | ~~Link previews never worked~~                                                                                     | ✅ Resolved     | D68                                                                                            |
-| K9  | S4    | ~~A NUL byte hid `transport/baileys.ts` from grep~~                                                                | ✅ Resolved     | D61, D62                                                                                       |
-| K10 | S4    | ~~AI replies not pushed to an open inbox thread~~                                                                  | ✅ Resolved     | `bot-send.ts` pushes `message:received` (T-909)                                                |
-| K11 | S4    | E1.2 and E4.17 fail on Linux hosts with no OS keyring (secret stored with the `plain:` marker)                     | Environmental   | The documented degrade path working; Windows always has DPAPI                                  |
-| K12 | S4    | `ai-openai.spec.ts` reuses E4.24/E4.25, which SPRINTS §12.3 assigns to smoke and regression                        | Open            | T-1420                                                                                         |
-| K13 | D89   | Rich messages show only a one-line summary in the inbox thread                                                     | Open            | T-1401                                                                                         |
-| K14 | D89   | No push event for new calls or webhook deliveries; those tables refresh on open                                    | Open            | T-1402. Nothing polls                                                                          |
-| K15 | D89   | The group settings panel does not prefill the current description                                                  | Open            | T-1403 — no channel returns it                                                                 |
-| K16 | D89   | A product template can be sent from a device whose catalog lacks that product                                      | Open            | T-1404                                                                                         |
-| K17 | D89   | Group cache drift: sync does not refresh admins-only/locked/join-approval; a deleted group lingers                 | Open            | T-1408, T-1409. Flags refresh whenever metadata is read                                        |
-| K18 | D89   | An excluded tag excludes a contact record, not the phone number: the same number in another list is still messaged | Open (customer) | T-1410, ROADMAP R6                                                                             |
-| K19 | D89   | A restart during AI burst coalescing means that burst gets no bot reply                                            | Accepted        | D101 — never two replies                                                                       |
-| K20 | D89   | A warmup conversation interrupted by a crash is not retried                                                        | Accepted        | D109 — warmup traffic, already counted                                                         |
-| K21 | D89   | A sequence send that times out marks the enrollment `failed` instead of retrying                                   | Accepted        | D99 — at-most-once over a possible duplicate                                                   |
+| #   | Found | Issue                                                                                                                                               | Severity            | Status and next step                                                                                            |
+| --- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| K1  | S3    | A message in flight during a crash may send twice — at most one per device per crash                                                                | Accepted            | SPRINTS §6.4. WhatsApp has no dedup primitive. Sequences share the bound (D99)                                  |
+| K2  | S1    | ~~Spike-only `SpikeProbe` table in the baseline migration~~                                                                                         | ✅ Resolved         | Regenerated in T1.4; E1.13 asserts it is absent                                                                 |
+| K3  | S1    | Builds are unsigned (the default-icon warning is fixed)                                                                                             | Blocked on user     | T-1502, T-1503                                                                                                  |
+| K4  | S3    | Intermittent E2E launch timeouts, ~1 per 2 full runs, always a launch wait                                                                          | Environmental       | Passes in isolation. Deliberately not masked with retries. Re-check on a quieter machine or CI                  |
+| K5  | S4    | ~~`settings:get/set` had no handler~~                                                                                                               | ✅ Resolved         | Found by E4.17; implemented in T4.3                                                                             |
+| K6  | S4    | The release pipeline has never run end to end: no signed installer, no update installed                                                             | Blocked on user     | Config complete, packaged build green. T-1602–T-1604                                                            |
+| K7  | S4    | `npm audit`: 4 high under `--omit=dev`, all in the Prisma CLI (dev-only, verified absent from `app.asar`)                                           | Accepted            | sharp, js-yaml, fast-uri fixed (D82). Re-triage after the D89 wave and Wave 3 (`read-excel-file` added): T-1422 |
+| K8  | S4    | ~~Link previews never worked~~                                                                                                                      | ✅ Resolved         | D68                                                                                                             |
+| K9  | S4    | ~~A NUL byte hid `transport/baileys.ts` from grep~~                                                                                                 | ✅ Resolved         | D61, D62                                                                                                        |
+| K10 | S4    | ~~AI replies not pushed to an open inbox thread~~                                                                                                   | ✅ Resolved         | `bot-send.ts` pushes `message:received` (T-909)                                                                 |
+| K11 | S4    | E1.2 and E4.17 fail on Linux hosts with no OS keyring (secret stored with the `plain:` marker)                                                      | Environmental       | The documented degrade path working; Windows always has DPAPI                                                   |
+| K12 | S4    | `ai-openai.spec.ts` reuses E4.24/E4.25, which SPRINTS §12.3 assigns to smoke and regression                                                         | Open                | T-1420                                                                                                          |
+| K13 | D89   | Inbox rich messages are labelled cards (Wave 3) with no map, poll result, audio player or thumbnail                                                 | Open                | T-1401                                                                                                          |
+| K14 | D89   | No push event for new calls or webhook deliveries; those tables refresh on open                                                                     | Open                | T-1402. Nothing polls                                                                                           |
+| K15 | D89   | The group settings panel does not prefill the current description                                                                                   | Open                | T-1403 — no channel returns it                                                                                  |
+| K16 | D89   | A product template can be sent from a device whose catalog lacks that product                                                                       | Open                | T-1404                                                                                                          |
+| K17 | D89   | Group cache drift: sync does not refresh admins-only/locked/join-approval; a deleted group lingers                                                  | Open                | T-1408, T-1409. Flags refresh whenever metadata is read                                                         |
+| K18 | D89   | An excluded tag excludes a contact record, not the phone number: the same number in another list is still messaged                                  | Open (customer)     | T-1410, ROADMAP R6                                                                                              |
+| K19 | D89   | A restart during AI burst coalescing means that burst gets no bot reply                                                                             | Accepted            | D101 — never two replies                                                                                        |
+| K20 | D89   | A warmup conversation interrupted by a crash is not retried                                                                                         | Accepted            | D109 — warmup traffic, already counted                                                                          |
+| K21 | D89   | A sequence send that times out marks the enrollment `failed` instead of retrying                                                                    | Accepted            | D99 — at-most-once over a possible duplicate                                                                    |
+| K22 | W3    | Away messages obey quiet hours: with the defaults none goes out 21:00–09:00, most of the closed time                                                | Open (customer)     | T-1433, ROADMAP R4. D133                                                                                        |
+| K23 | W3    | A welcome parked by quiet hours or the cap is dropped and never retried                                                                             | Open                | T-1432. D133 — a late welcome reads as a glitch                                                                 |
+| K24 | W3    | The self-test now asserts the `.xlsx` worker, `read-excel-file`, the tray icon and the wa-service entry, but has not run on a packaged Wave 3 build | Open                | T-1605 — after the help-system merge. D150                                                                      |
+| K25 | W3    | Tray clicks, OS notifications, start at login and tapped buttons/list rows are verified only on the mock and headless Linux                         | Open (needs device) | T-1442, REQUIREMENTS §10                                                                                        |
+| K26 | W3    | Windows shows no unread count; the taskbar button only flashes                                                                                      | Open                | T-1441                                                                                                          |
+| K27 | W3    | Incoming photos and videos show as "Photo or video"; a scheduled audio file is sent as a document                                                   | Open                | T-1435                                                                                                          |
+| K28 | W3    | A contact whose number WhatsApp never reveals stays "Number hidden by WhatsApp"                                                                     | Accepted            | D129 — repaired automatically when the number appears; never guessed                                            |
 
 ## 6. Test results history
 
@@ -140,6 +156,8 @@ suite. "n/r" means the check was not recorded for that run.
 | 2026-10-02 | Dependencies + macOS     | 0   | 104        | **101 pass / 2 fail / 1 skipped** | ✅        | ✅   | ✅ self-test   | Electron 44.5.1, Baileys rc14 (D86). The 2 failures are K11, identical to baseline                                                                                                                                                                                                                                                                                                                                 |
 | 2026-10-02 | D89 foundation           | 0   | 104        | 99 pass before 2 fixes            | ✅        | ✅   | n/r            | `6e59421`. After the fixes the affected suites (settings, campaigns, daily cap) ran 20/20; the full suite was not re-run until the merge                                                                                                                                                                                                                                                                           |
 | 2026-10-03 | **D89 wave, merged**     | 115 | 104        | **214 pass / 4 fail / 1 skipped** | n/r       | n/r  | n/r            | 219 tests. Failures: E1.2, E4.17 (K11) and E5.69, E6.10 — both fixed in `9981076`, 30/30 on re-run. Each agent's own suite was green in its worktree                                                                                                                                                                                                                                                               |
+| 2026-10-03 | **Wave 3, merged**       | 75  | 219        | **291 pass / 2 fail / 1 skipped** | ✅        | ✅   | n/r            | `a1a4e73`, 294 tests, 19.7 min. New: E7.1–E7.10, E8.1–E8.73 (E8.49 unused), E6.1b. The 2 failures are E1.2 (with E1.7) and E4.17 — K11, no OS keyring. Lint: 0 errors, the known `useVirtualizer` warning. Self-test runs after the help-system merge (T-1605)                                                                                                                                                     |
+| 2026-10-03 | LID numbers + fixes      | 7   | 62         | 7 pass + 62/62                    | n/r       | n/r  | n/r            | `0e9dddb`, 301 tests. E8.80–E8.86, with automation, group-tools, sprint-4-inbox and audience re-run. Full suite not re-run                                                                                                                                                                                                                                                                                         |
 
 ## 7. Decision log
 

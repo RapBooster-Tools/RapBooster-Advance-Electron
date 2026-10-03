@@ -18,18 +18,18 @@ Rules: [CLAUDE.md](../CLAUDE.md) · Spec: [SPRINTS.md](../SPRINTS.md)
 - Entries are grouped by area; the area is a reading aid, not part of the ID.
 - Record the decision **in the same commit** as the code it describes.
 
-| Area                                                                          | Entries                                                                                         |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128                                                                |
-| [Architecture](#architecture)                                                 | D2–D4, D13–D16, D18, D31–D34, D39, D40, D42, D89, D93, D94                                      |
-| [WhatsApp and anti-ban](#whatsapp-and-anti-ban)                               | D6, D7, D45, D49, D61, D63, D68, D70, D71, D76, D77, D95, D97, D99, D100, D107, D109–D111, D116 |
-| [Data](#data)                                                                 | D5, D8, D35–D37, D41, D43, D50, D73, D74, D90, D112, D113, D115                                 |
-| [Security and licensing](#security-and-licensing)                             | D17, D23–D25, D29, D52, D64, D65, D88, D104, D105                                               |
-| [AI and automation](#ai-and-automation)                                       | D53, D54, D78, D101–D103, D108, D114                                                            |
-| [UX](#ux)                                                                     | D20–D22, D28, D44, D48, D67, D75, D96, D106                                                     |
-| [Packaging and release](#packaging-and-release)                               | D12, D55, D58, D62                                                                              |
-| [Dependencies](#dependencies)                                                 | D9–D11, D56, D57, D59, D60, D69, D82, D86, D91                                                  |
-| [Process and testing](#process-and-testing)                                   | D19, D26, D27, D30, D38, D46, D47, D51, D72, D83, D84, D87, D92, D98                            |
+| Area                                                                          | Entries                                                                                                           |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128                                                                                  |
+| [Architecture](#architecture)                                                 | D2–D4, D13–D16, D18, D31–D34, D39, D40, D42, D89, D93, D94, D130, D144, D146                                      |
+| [WhatsApp and anti-ban](#whatsapp-and-anti-ban)                               | D6, D7, D45, D49, D61, D63, D68, D70, D71, D76, D77, D95, D97, D99, D100, D107, D109–D111, D116, D129, D134, D147 |
+| [Data](#data)                                                                 | D5, D8, D35–D37, D41, D43, D50, D73, D74, D90, D112, D113, D115, D136, D137, D139, D140, D148                     |
+| [Security and licensing](#security-and-licensing)                             | D17, D23–D25, D29, D52, D64, D65, D88, D104, D105                                                                 |
+| [AI and automation](#ai-and-automation)                                       | D53, D54, D78, D101–D103, D108, D114, D131–D133                                                                   |
+| [UX](#ux)                                                                     | D20–D22, D28, D44, D48, D67, D75, D96, D106, D135, D141–D143, D145                                                |
+| [Packaging and release](#packaging-and-release)                               | D12, D55, D58, D62, D150                                                                                          |
+| [Dependencies](#dependencies)                                                 | D9–D11, D56, D57, D59, D60, D69, D82, D86, D91, D138                                                              |
+| [Process and testing](#process-and-testing)                                   | D19, D26, D27, D30, D38, D46, D47, D51, D72, D83, D84, D87, D92, D98, D149                                        |
 
 ---
 
@@ -72,17 +72,17 @@ Decisions the customer made. Code follows them; they change only on a new custom
 - **D121** · 2026-10-02 · Accepted — Process: always work on `main`; subagents by default for
   independent work; Claude memory kept in the repository (D87). _Then:_ CLAUDE.md §3 and §10.
 - **D122** · 2026-10-03 · Accepted — UI: a modern design system with light and dark themes and
-  a WhatsApp phone preview for messages. _Then:_ Wave 3 (T-1301); spec in
+  a WhatsApp phone preview for messages. _Then:_ built in Wave 3 (T-1301, D145); spec in
   [DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md).
 - **D123** · 2026-10-03 · Accepted — Help: a first-run setup wizard, help on every screen,
   interactive guided tours and a full user guide. _Why:_ the users are not technical. _Then:_
-  Wave 3 (T-1312–T-1315); [USER-GUIDE.md](./USER-GUIDE.md).
+  Wave 4 (T-1312–T-1315, SPRINTS.md §17); [USER-GUIDE.md](./USER-GUIDE.md).
 - **D124** · 2026-10-03 · Accepted — Inbox: quick replies, a contact side panel with notes,
   desktop notifications with a tray icon and background running, and scheduled messages per
-  chat. _Then:_ Wave 3 (T-1303–T-1306).
+  chat. _Then:_ built in Wave 3 (T-1303–T-1306; D134, D135, D142–D144).
 - **D125** · 2026-10-03 · Accepted — Automation: a visual chatbot flow builder, welcome and away
-  messages, a WhatsApp contacts grabber, and Excel and vCard import. _Then:_ Wave 3
-  (T-1307–T-1310).
+  messages, a WhatsApp contacts grabber, and Excel and vCard import. _Then:_ built in Wave 3
+  (T-1307–T-1310; D130–D133, D136–D140).
 - **D126** · 2026-10-02 · Accepted — Safety defaults: 200 sends per device per day and quiet
   hours 21:00–09:00, applied to existing installs that never changed the setting, with a
   one-time notice. _Then:_ `services/sending-policy.ts`; the dashboard shows the notice once.
@@ -146,7 +146,7 @@ Decisions the customer made. Code follows them; they change only on a new custom
 - **D42** · 2026-07-28 · Accepted — The throttle lives in `wa-service`; the campaign worker loop
   lives in main. _Why:_ the worker needs the database, and pacing at the socket boundary means
   no caller can bypass it. _Then:_ deviation DV2 from SPRINTS §3.1.
-- **D89** · 2026-10-02 · Accepted — Marketing-suite architecture. (1) The IPC contract is split
+- **D89** · 2026-10-02 · Amended by D130 — Marketing-suite architecture. (1) The IPC contract is split
   by domain into `shared/contract/*.ts` and spread into the single `ipcContract` in
   `shared/ipc.ts`. (2) One inbound pipeline, `services/inbound.ts`, in a fixed order:
   own-device skip → opt-out → reply attribution → sequence stop → `message.received` webhook →
@@ -167,6 +167,26 @@ Decisions the customer made. Code follows them; they change only on a new custom
   _Why:_ four features kept private copies, and AI, keyword-rule and group sends were never
   counted, so a restart handed devices extra allowance.
 
+- **D130** · 2026-10-03 · Accepted — The inbound pipeline (D89) gains two steps. Order:
+  own-device skip → opt-out → reply attribution → sequence stop → `message.received` webhook →
+  **welcome/away** → **chatbot flows** → keyword rules → AI. Welcome and away are sent
+  _alongside_ whatever follows and never stop it; a flow that answers, or a chat already in a
+  flow, stops keyword rules and the AI. _Why:_ a customer halfway through a menu must get the
+  menu's next step, not a keyword reply to the word they typed; a greeting is not an answer.
+  _Then:_ amends D89. E8.25, E8.26.
+- **D144** · 2026-10-03 · Accepted — `services/desktop.ts` owns macOS `activate`, and one
+  `showWindow()` in `index.ts` serves the tray, a notification click and a second launch
+  (`requestSingleInstanceLock`). _Why:_ `index.ts` also recreated a window on `activate`, so
+  one Dock click could open two windows. _Then:_ any new "bring the app forward" path calls
+  `showWindow()`; nothing else creates the main window. E8.62, E8.73.
+- **D146** · 2026-10-03 · Accepted — Update ("patch") schemas are built with `patchOf()` in
+  `shared/contract/common.ts`, never with `.partial()` on a schema that has defaults. _Why:_
+  zod 4 applies `.default()` inside `.partial()`, so `rule:update { id, enabled }` — the rules
+  list's on/off switch — silently reset match type, devices, priority and cooldown. _Then:_
+  `rule:update` and `flow:update` use it (E6.1b). The remaining `.partial()` schemas
+  (`settings:setSendingDefaults`, `quickReply:update`, `app:setPrefs`) have no defaults; adding
+  one means switching to `patchOf()`. CLAUDE.md §9.
+
 ## WhatsApp and anti-ban
 
 - **D6** · 2026-07-27 · Accepted — The mock transport was built in Sprint 2, before the campaign
@@ -178,7 +198,7 @@ Decisions the customer made. Code follows them; they change only on a new custom
 - **D49** · 2026-07-28 · Accepted — A dropped device's **pending** rows are reassigned; sent and
   in-flight rows are not. _Why:_ only pending work is safe to move. _Then:_ with no device
   left the campaign pauses with a reason instead of stalling at 80%.
-- **D61** · 2026-07-28 · Accepted — Group admin detection compares normalized JIDs
+- **D61** · 2026-07-28 · Amended by D129 — Group admin detection compares normalized JIDs
   (`jidNormalizedUser`), not string prefixes. _Why:_ prefix matching treated +9198765432100 as
   +919876543210 and offered admin actions that then failed.
 - **D63** · 2026-07-28 · Accepted — Media and documents stream from disk (`{ url: path }`),
@@ -240,6 +260,39 @@ Decisions the customer made. Code follows them; they change only on a new custom
   the optional reply is an automated send, and a reply blocked by quiet hours or the cap is
   dropped, not queued. _Why:_ a "sorry I missed your call" hours later reads as spam.
 
+- **D129** · 2026-10-03 · Accepted — A LID (`<id>@lid`) is never a phone number. WhatsApp
+  addresses many people by a LID; its digits were shown as the number, and `chatE164` turned
+  them into `+<digits>` — possibly a stranger's real number — which then fed opt-out checks,
+  profiles and calls. Now a `LidResolver` per account (`wa-service/transport/lid.ts`, shared
+  by the Baileys and mock transports) resolves in order: a number WhatsApp hands over (message
+  key `remoteJidAlt`/`participantAlt`, contact or member `phoneNumber`), pairs it has learned
+  (history-sync `lidPnMappings`, contacts, chats, group members, `lid-mapping.update`), then
+  Baileys' store (`signalRepository.lidMapping`). One-to-one chats are filed under the
+  phone-number JID whenever the number is known. An unresolved LID is stored as the stand-in
+  `<id>@lid`, never E.164, and shown as "Number hidden by WhatsApp" (`shared/phone-display.ts`).
+  When the transport's `lidMapping` event reveals the number, `services/lid-repair.ts` renames
+  the hidden chat onto it or merges it into the existing chat (Chat foreign keys cascade on
+  update; `KeywordRuleHit` and `AiUsage` are moved by hand), and moves opt-outs and
+  `CallEvent.from`. A STOP from a hidden number is honoured at once. Group admin detection
+  also matches our own LID, and members and join requests resolve. A hidden caller stays
+  hidden; `rejectCall` uses the offer's own JID, remembered per call id in the transport.
+  _Why:_ messaging or suppressing the wrong number is the worst error a bulk sender can make.
+  _Then:_ `Chat.phone` indexed (migration `20261003130000`); amends D61. E8.80–E8.86.
+- **D134** · 2026-10-03 · Accepted — Scheduled messages are **automated** sends, not manual
+  ones: `ScheduledMessage` rows, claimed by one conditional UPDATE (`scheduled` → `sending`, so
+  a Cancel that lands first wins), up to 50 per scheduler tick, sent through `message:send`
+  without `manual`. They obey the delay, the daily cap and quiet hours (a parked send returns
+  to `scheduled`); an opted-out number fails with a reason; rows left `sending` by a crash are
+  recovered at boot. _Why:_ D89 (4) exempts a person typing in the inbox; at send time nobody
+  is there, so the message is automation like any other. _Then:_ E8.12–E8.15; the duplicate
+  bound is K1's.
+- **D147** · 2026-10-03 · Accepted — Baileys inbound parsing reads tapped replies:
+  `buttonsResponseMessage`, `templateButtonReplyMessage`, `listResponseMessage` and
+  `interactiveResponseMessage` carry the tapped label (or the option id) as the message body,
+  and flows match a menu reply by number, title or option id. _Why:_ the body was empty, so on
+  a real connection flows and keyword rules never understood a tap. _Then:_ E8.31 covers it on
+  the mock only; real-device confirmation is T-1442.
+
 ## Data
 
 - **D5** · 2026-07-27 · Accepted — `Contact.data` is a JSON blob with promoted `name`/`phone`.
@@ -281,6 +334,35 @@ Decisions the customer made. Code follows them; they change only on a new custom
 - **D115** · 2026-10-02 · Accepted — Group member export builds a de-duplicated contact list,
   excluding our own number and hidden LID-only participants; names are the phone numbers.
   _Why:_ WhatsApp group metadata carries no names.
+
+- **D136** · 2026-10-03 · Accepted — vCard import uses our own reader (2.1, 3.0, 4.0, folded
+  lines, QUOTED-PRINTABLE) and makes **one row per card**: the mobile number (else the
+  preferred one, else the first) in `Phone`, every other number in `Other phones`. _Why:_ one
+  row per number would message the same person once per number they own — the duplicate a
+  bulk sender must avoid; only five fields are needed, so a library adds nothing. E8.40,
+  E8.44, E8.45.
+- **D137** · 2026-10-03 · Accepted — `.xlsx` import reads the first sheet in a
+  `worker_threads` worker that posts rows in chunks of 1,000. Numbers are kept as the text the
+  cell stores, never a float, so a 12-digit phone number survives exactly; dates become ISO
+  strings. `.xls` and other types are refused with a plain-English instruction. _Why:_ an
+  `.xlsx` is parsed whole, which for 50,000 rows is seconds of CPU that would freeze main.
+  _Then:_ the worker ships as its own chunk; the packaged self-test reads a small workbook
+  through it (T-1429).
+  E8.41–E8.43, E8.46, E8.48.
+- **D139** · 2026-10-03 · Accepted — The import pipeline yields one macrotask
+  (`setImmediate`) after every 1,000-row batch. _Why:_ rows already in memory and the
+  synchronous SQLite driver resolve entirely in microtasks, which starved every IPC call for
+  the whole import. Worst IPC latency during a 50,000-row `.xlsx` import is now 0.73 s. E8.48.
+- **D140** · 2026-10-03 · Accepted — The WhatsApp contacts grabber exports into a **new**
+  list, de-duplicated by normalized phone across every chosen phone (read in phone order, so
+  copies are adjacent and nothing is held in memory; the first name found wins), in
+  1,000-row transactions; a failed export deletes the half-filled list. Opted-out numbers are
+  **imported but never messaged**, and the user is told how many. _Why:_ suppression is
+  enforced at send time for every list (D105), so dropping them would add nothing and hide
+  who they are. E8.54, E8.55, E8.59.
+- **D148** · 2026-10-03 · Accepted — A group chat is named from `Group.name` (else "Group"),
+  and an inbound push name never renames it. _Why:_ `persistIncoming` renamed the group to
+  whichever member wrote last, which also made group notifications show a person's name.
 
 ## Security and licensing
 
@@ -347,11 +429,38 @@ Decisions the customer made. Code follows them; they change only on a new custom
   config is cached in memory and invalidated on change, keys are read fresh. _Why:_ customer
   scope (D117) without adding dependencies.
 
+- **D131** · 2026-10-03 · Accepted — One pure step function, `runStep` in
+  `services/flows/run.ts`, decides every flow step; the engine (real chats) and
+  `flow:simulate` (the builder's Test panel) both call it, and the graph schema in
+  `shared/flow.ts` is shared by the contract and the engine. Menus match by number, title or
+  option id; anything else gets the menu's "didn't understand" text and the menu again;
+  question answers become `{{variables}}` that win over contact fields of the same name;
+  handoff reuses `escalate()`. Replies are serialised per chat. _Why:_ what the customer
+  receives must be exactly what the user saw when testing. E8.21–E8.25, E8.30, E8.35.
+- **D132** · 2026-10-03 · Accepted — A chat's place in a flow is one `FlowSession` row,
+  refreshed on each step and valid for **30 minutes** (`FLOW_SESSION_MINUTES`); the scheduler
+  deletes expired ones and the next message starts fresh. A send parked by quiet hours or the
+  cap leaves the session where it was. Switching a flow off or deleting it **ends its
+  sessions**; a duplicated flow starts off. _Why:_ a customer who left mid-menu must not have
+  a later "1" read as a menu choice, and a flow the user turned off must stop answering now,
+  not in half an hour. E8.29, E8.33.
+- **D133** · 2026-10-03 · Accepted — Welcome and away messages (Setting `autoreply.config`,
+  both off by default). Welcome: once per chat, on its first inbound message. Away: outside
+  the weekly hours (this computer's time zone), at most once per cooldown per chat (default
+  12 h). Each is **stamped before sending** with a conditional update (`Chat.welcomedAt`,
+  `Chat.lastAwayAt`), so of two simultaneous messages only one can win. Both are automated
+  sends: quiet hours and the cap apply, and a parked one is dropped, not queued (as D116). A
+  dropped away message is un-stamped so the next message may try again; a welcome is not,
+  because a welcome mid-conversation reads as a glitch. Never sent to groups, chats opted out
+  of auto-replies, or suppressed numbers. _Then:_ with the default quiet hours no away message
+  goes out 21:00–09:00 (K22, ROADMAP R4), and a welcome lost to quiet hours is gone (K23,
+  T-1432). E8.36–E8.39.
+
 ## UX
 
-- **D20** · 2026-07-28 · Accepted — Hand-written UI primitives instead of the shadcn CLI. _Why:_
+- **D20** · 2026-07-28 · Amended by D145 — Hand-written UI primitives instead of the shadcn CLI. _Why:_
   the CLI wants to own the layout of a single-app root. Deviation DV1. _Then:_ the Wave 3 design
-  system (D122) replaces them.
+  system (D145) modernised them; they are still hand-written.
 - **D21** · 2026-07-28 · Accepted — The `app://` handler resolves Next's dot-flattened RSC
   payload paths. _Why:_ every client-side navigation 404'd and silently fell back to a full
   load. Amended by D27.
@@ -368,12 +477,49 @@ Decisions the customer made. Code follows them; they change only on a new custom
   and 50,000 rows wide. E2.14b, E2.14c.
 - **D75** · 2026-07-28 · Accepted — The dashboard refetches on campaign, device and message
   events. _Why:_ it is the landing route and is usually already mounted. E4.22.
-- **D96** · 2026-10-03 · Accepted — A native file picker (`system:pickFile`) for every file
-  input; non-technical users never type a path. _Then:_ the channel exists; wiring every
-  screen that still takes a typed path is T-1311.
+- **D96** · 2026-10-03 · Amended by D141 — A native file picker (`system:pickFile`) for every file
+  input; non-technical users never type a path. _Then:_ every screen wired in Wave 3 (D141,
+  T-1311).
 - **D106** · 2026-10-02 · Accepted — Spintax (`{a|b}`) is rendered before merge tags, so
   customer data is never spun; a brace group with no `|` keeps its braces; nesting capped at
   20; `\{ \} \|` escape. _Then:_ a literal `\|` in old templates now sends as `|`.
+
+- **D135** · 2026-10-03 · Accepted — Quick replies are shared by every number and rendered in
+  main with the shared merge-tag renderer (D40), from the newest contact record with the
+  chat's number, falling back to the chat's name and number so `{{Name}}` is never blank.
+  Inserting one never sends: the text lands in the composer and the person presses Send, so
+  it goes out as a manual reply. Shortcuts are unique. E8.1–E8.5.
+- **D141** · 2026-10-03 · Accepted — `FilePickerField` (`renderer/components/common`) over
+  `system:pickFile` replaces every typed path: contact import, opt-out import, broadcast
+  media, template media, voice note and sticker; inbox and scheduled attachments use the same
+  picker. _Then:_ no screen takes a typed path; amends D96. Restoring a backup has no screen
+  yet (T-1438). E8.17, E8.47.
+- **D142** · 2026-10-03 · Accepted — Desktop notifications for inbound messages, only while
+  the app is not in front: at most one per chat per 10 s, and more than three chats inside
+  that window collapse into one "N new messages". The 80-character preview reaches the OS
+  notification and nothing else — never a log line, never the test seam. A click opens that
+  chat (`app:navigate`). The macOS Dock shows the unread total; Windows flashes the taskbar
+  button. _Why:_ a busy inbox must not bury the screen, and message content is customer data
+  (CLAUDE.md §5.2). E8.61–E8.66.
+- **D143** · 2026-10-03 · Accepted — Background running and start at login. Defaults:
+  notifications on; run in background on (closing hides to the tray, with a one-time notice);
+  start at login off. Start at login registers on Windows with `--hidden` and on macOS with
+  `openAtLogin` (a login launch is detected by `wasOpenedAtLogin`); it is a no-op on Linux,
+  under E2E and in an unpackaged dev run. A `--hidden` launch starts in the tray. The tray
+  shows "N devices connected · M campaigns running", Open, Pause all campaigns and Quit.
+  Preferences are `app.<field>` rows in `Setting`, cached in memory because the close handler
+  is synchronous (DV7). _Why:_ campaigns send only while the app runs (ROADMAP R1, R2).
+  E8.60, E8.67–E8.69, E8.71–E8.73.
+- **D145** · 2026-10-03 · Accepted — The theme system ([DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md)):
+  every colour is a token in `globals.css`, redefined under `[data-theme='dark']`; `<html>`
+  carries `data-theme` (shown) and `data-theme-preference` (chosen: light, dark, or system —
+  the default, which follows the OS live). An inline bootstrap script, admitted by its CSP
+  hash, applies the choice from `localStorage` **before first paint**. `system:setThemeSource`
+  sets `nativeTheme.themeSource`, so the OS title bar follows, and the window background
+  colour follows the theme. The sidebar is grouped (Overview · Messaging · Audience ·
+  Automation · Setup) and collapsible. _Why:_ only a synchronous read beats the first paint,
+  and the choice is a per-machine cosmetic, so losing it costs only the default. _Then:_
+  amends D20; SPRINTS.md §7 "light theme only" no longer holds (DV9). E7.1–E7.10.
 
 ## Packaging and release
 
@@ -388,6 +534,14 @@ Decisions the customer made. Code follows them; they change only on a new custom
 - **D62** · 2026-07-28 · Accepted — Raw control characters are rejected from source by
   `scripts/check-source.mjs`. _Why:_ one NUL byte made `transport/baileys.ts` invisible to grep
   for four sprints and hid D61's bug.
+
+- **D150** · 2026-10-03 · Accepted — Main finds the wa-service entry by probing a candidate
+  list (`wa-service-path.ts` `waServicePath()`, like `migrationsDir()`), never `__dirname`
+  alone, and the packaged self-test asserts the entry exists. _Why:_ when the self-test began
+  importing the tray module, Rollup moved `wa-bridge` into a shared chunk, `__dirname` became
+  `out/main/chunks`, wa-service was looked up at `chunks/wa-service/index.js` and crashed, and
+  every `device:connect` failed. _Then:_ CLAUDE.md §9 — no module imported by two entries
+  resolves a sibling file from `__dirname`.
 
 ## Dependencies
 
@@ -419,6 +573,11 @@ Decisions the customer made. Code follows them; they change only on a new custom
   asserted by `scripts/check-deps.mjs` and the packaged self-test. _Why:_ D60 triaged it as not
   needed while media was image/video only; voice notes changed that.
 
+- **D138** · 2026-10-03 · Accepted — `read-excel-file` `9.3.10`, pinned exactly, reads
+  `.xlsx` (D137). _Why:_ customer scope (D125); it reads a sheet into rows and lets us keep
+  numbers as their stored text. The npm `xlsx` (SheetJS) package is frozen at an old release
+  with open advisories. _Then:_ asserted by the packaged self-test (T-1429).
+
 ## Process and testing
 
 - **D19** · 2026-07-28 · Accepted — The E2E fixture awaits `firstWindow()`, which only exists
@@ -445,7 +604,7 @@ Decisions the customer made. Code follows them; they change only on a new custom
 - **D87** · 2026-10-02 · Accepted — Claude memory lives in the repository only: auto memory off,
   `~/.claude/CLAUDE.md` excluded, notes in `.claude/memory/MEMORY.md` imported by CLAUDE.md.
   _Why:_ customer instruction; a committed file follows the repo between machines.
-- **D92** · 2026-10-02 · Accepted — E2E-only seams and defaults. Under `NODE_ENV=test` quiet
+- **D92** · 2026-10-02 · Amended by D149 — E2E-only seams and defaults. Under `NODE_ENV=test` quiet
   hours and typing simulation default **off** (otherwise results depend on the wall clock).
   Honoured only under test: `RB_TICK_MS`, `RB_PICK_FILE`, `RB_SHEETS_BASE_URL`,
   `RB_WEBHOOK_BACKOFF_MS`, `RB_WARMUP_FORCE`. Mock transport seams: `WA_MOCK_INJECT`,
@@ -457,3 +616,10 @@ Decisions the customer made. Code follows them; they change only on a new custom
   `node_modules` (`cp -al`), never a symlink: Turbopack rejects the symlink and `npm run build`
   then fails **while exiting 0**, leaving a stale `out/` that E2E silently tests. _Then:_
   CLAUDE.md §3.4.
+- **D149** · 2026-10-03 · Accepted — Wave 3 E2E seams, all inert unless `NODE_ENV=test`:
+  `RB_FLOW_SESSION_MS` (shortens the 30-minute flow session, minimum 500 ms), `RB_NOTIFY_LOG`
+  (notifications are written to a file as `{title, chatId}` — never the body — instead of
+  reaching the OS) and `globalThis.__rbDesktop` (desktop internals for the tray and close
+  specs). The mock transport also emits a fixed address book and chat list through the new
+  `contacts` event. _Why:_ D92's rule — a stray variable in production does nothing. _Then:_
+  amends D92; CLAUDE.md §9.

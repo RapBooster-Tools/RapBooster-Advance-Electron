@@ -10,39 +10,35 @@ What comes next, and in what order. Forward-looking only: finished work is ticke
 
 ## Where we are
 
-| Milestone                          | State                                                                           |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
-| Sprints 0–4 (the nine screens)     | ✅ Done                                                                         |
-| Improvement plan, Phases 0–5       | ✅ Done — see [Delivered](#delivered)                                           |
-| Wave D89 — marketing suite         | ✅ Merged 2026-10-03 (D117; SPRINTS.md §15)                                     |
-| **Wave 3 — ease of use and inbox** | 🟡 In progress — [below](#wave-3--now)                                          |
-| Release                            | 🔴 Blocked on the customer — [TASKS §15](./TASKS.md#15-blocked-on-the-customer) |
+| Milestone                         | State                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------- |
+| Sprints 0–4 (the nine screens)    | ✅ Done                                                                         |
+| Improvement plan, Phases 0–5      | ✅ Done — see [Delivered](#delivered)                                           |
+| Wave D89 — marketing suite        | ✅ Merged 2026-10-03 (D117; SPRINTS.md §15)                                     |
+| Wave 3 — workspace and automation | ✅ Merged 2026-10-03 (D122, D124, D125; SPRINTS.md §16)                         |
+| **Wave 4 — help system**          | 🟡 In progress — [below](#wave-4--now)                                          |
+| Release                           | 🔴 Blocked on the customer — [TASKS §15](./TASKS.md#15-blocked-on-the-customer) |
 
-## Wave 3 — now
+## Wave 4 — now
 
-Customer decisions of 2026-10-03 (D122–D125). The goal is that a non-technical user can
-install, link a number and run a first campaign without help, and can work the inbox all day.
+The help system (D123): a first-run setup wizard (link a device → import contacts → first
+template → first campaign), help and tooltips on every screen, interactive guided tours and an
+in-app Help Center with [USER-GUIDE.md](./USER-GUIDE.md) — T-1312–T-1315, SPRINTS.md §17. The
+goal is that a non-technical user can install, link a number and run a first campaign without
+help. Wave 3 left the hooks for it: the title bar's help slot, `PageHeader`'s `helpSlot`, and
+`onboardingCompleted` / `toursSeen` in the desktop preferences.
 
-| Theme          | Features                                                                     | Tasks                  |
-| -------------- | ---------------------------------------------------------------------------- | ---------------------- |
-| Look and feel  | Design system, light and dark themes, WhatsApp phone preview                 | T-1301                 |
-| Help           | Setup wizard, help on every screen, guided tours, Help Center and user guide | T-1312–T-1315          |
-| Inbox          | Quick replies, contact side panel with notes, scheduled messages per chat    | T-1303, T-1304, T-1306 |
-| Desktop        | Notifications, tray icon, background running, start at login                 | T-1305                 |
-| Automation     | Visual chatbot flow builder, welcome and away messages                       | T-1307, T-1308         |
-| Audience       | WhatsApp contacts grabber, Excel and vCard import                            | T-1309, T-1310         |
-| No typed paths | Native file picker everywhere                                                | T-1311                 |
+Wave 3 (design system, inbox tools, chatbot flows, welcome and away, Excel and vCard import,
+the contacts grabber, file pickers, desktop integration) is delivered; its follow-ups are
+T-1430–T-1442 in [TASKS §14](./TASKS.md#14-known-gaps).
 
-**Order.** The design system lands first, because every other Wave 3 screen is built on its
-components. Then, in parallel worktrees (D98): inbox features · automation builder · audience
-imports · help content. Help tours are written last, against the finished screens.
-
-## After Wave 3
+## After Wave 4
 
 1. **Release** — blocked only on the customer's inputs (TASKS §15), then TASKS §16: real
    license API, signed Windows and macOS builds, a verified update, a first real-device test.
-2. **Known-gap cleanup** — TASKS §14, cheapest and highest-risk first: test coverage gaps
-   (T-1414, T-1415), the graph and audit refresh (T-1421, T-1422), then UX gaps.
+2. **Known-gap cleanup** — TASKS §14, cheapest and highest-risk first: a packaged run on
+   Windows and macOS (T-1605), test coverage gaps (T-1414, T-1415), the graph and audit
+   refresh (T-1421, T-1422), then UX gaps.
 3. **Candidates, not yet decided** — each needs a customer yes before it is scheduled:
 
 | Candidate                                                             | Effort | Note                                                           |
@@ -59,7 +55,7 @@ imports · help content. Help tours are written last, against the finished scree
 ## Feature landscape
 
 How the product compares with what desktop WhatsApp marketing tools commonly offer, compiled
-from the customer's feature requests of 2026-10-02/03. ✅ built · 🟡 Wave 3 · — not planned.
+from the customer's feature requests of 2026-10-02/03. ✅ built · 🟡 Wave 4 · — not planned.
 
 | Area          | Capability                                                            | Status |
 | ------------- | --------------------------------------------------------------------- | ------ |
@@ -67,14 +63,14 @@ from the customer's feature requests of 2026-10-02/03. ✅ built · 🟡 Wave 3 
 | Sending       | Spintax, merge tags, rich types (poll, location, voice, buttons)      | ✅     |
 | Sending       | Quiet hours, warmup ramp, health auto-pause, typing simulation        | ✅     |
 | Audience      | CSV and Google Sheets import, tags, opt-out list, number filter       | ✅     |
-| Audience      | Excel and vCard import, WhatsApp contacts grabber                     | 🟡     |
+| Audience      | Excel and vCard import, WhatsApp contacts grabber                     | ✅     |
 | Groups        | Bulk messaging and creation, member grabber, admin tools, communities | ✅     |
 | Broadcast     | Status updates and Channels, scheduled                                | ✅     |
 | Automation    | Keyword replies, drip sequences, webhooks, call auto-reject           | ✅     |
-| Automation    | Visual chatbot builder, welcome and away messages                     | 🟡     |
+| Automation    | Visual chatbot builder, welcome and away messages                     | ✅     |
 | AI            | Several providers, caps, drafts for approval, escalation to a human   | ✅     |
 | Inbox         | Unified inbox across 20 numbers                                       | ✅     |
-| Inbox         | Quick replies, contact panel, scheduled messages, notifications       | 🟡     |
+| Inbox         | Quick replies, contact panel, scheduled messages, notifications       | ✅     |
 | Analytics     | Delivered, read and replied per campaign; 7-day dashboard             | ✅     |
 | Ease of use   | Setup wizard, guided tours, in-app help                               | 🟡     |
 | Collaboration | Multiple agents sharing one inbox                                     | —      |
@@ -99,15 +95,15 @@ Every open question of that plan (Q1–Q13) was answered by accepting its propos
 
 ## Open questions for the next waves
 
-Product questions that shape Wave 3 and later. Each has a default that is used unless the
-customer says otherwise. Release inputs (license API, certificates, branding, feed) are in
+Product questions that shape the next waves. Each has a default — the behaviour built today
+— that stays unless the customer says otherwise. Release inputs (license API, certificates, branding, feed) are in
 [REQUIREMENTS.md](../REQUIREMENTS.md), not here.
 
-| #   | Question                                                             | Default in use until answered                                            |
-| --- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| R1  | Closing the window: quit, or keep running in the tray?               | Keep running in the tray, with a one-time hint                           |
-| R2  | Start at login on by default?                                        | Off; offered in the setup wizard                                         |
-| R3  | Quick replies shared across all numbers, or per number?              | Shared, with an optional number filter                                   |
-| R4  | Do away messages respect quiet hours?                                | They _are_ the quiet-hours answer; sent at most once per chat per window |
-| R5  | Can the chatbot flow builder hand off to the AI bot?                 | Yes, as a final "ask AI" step                                            |
-| R6  | Should an excluded tag exclude the phone number everywhere (T-1410)? | Per contact record, as today                                             |
+| #   | Question                                                             | Default in use until answered                                                                      |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| R1  | Closing the window: quit, or keep running in the tray?               | Keep running in the tray, with a one-time notice (D143)                                            |
+| R2  | Start at login on by default?                                        | Off; Settings › Desktop, and offered in the setup wizard (Wave 4)                                  |
+| R3  | Quick replies shared across all numbers, or per number?              | Shared by every number; no per-number filter yet (D135)                                            |
+| R4  | Do away messages respect quiet hours?                                | Yes, like every automated send, so with the defaults none goes out 21:00–09:00 (D133, K22, T-1433) |
+| R5  | Can the chatbot flow builder hand off to the AI bot?                 | Not built: a flow hands off to a person, and the AI stays out until handed back (D131)             |
+| R6  | Should an excluded tag exclude the phone number everywhere (T-1410)? | Per contact record, as today                                                                       |

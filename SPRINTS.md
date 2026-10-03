@@ -30,6 +30,8 @@ application.
 13. [Cross-sprint definition of done](#13-cross-sprint-definition-of-done)
 14. [Dependency manifest](#14-dependency-manifest)
 15. [Sprint 5 — Marketing suite (D89)](#15-sprint-5--marketing-suite-d89)
+16. [Wave 3 — Workspace, automation and design system](#16-wave-3--workspace-automation-and-design-system)
+17. [Wave 4 — Help system (E9.x), in progress](#17-wave-4--help-system-e9x-in-progress)
 
 ---
 
@@ -39,7 +41,8 @@ RapBooster Advance is a licensed Windows and macOS desktop application for Whats
 marketing. It connects multiple WhatsApp accounts through Baileys, stores everything in a local
 SQLite database scoped to the OS user, and runs bulk campaigns, group operations, a unified
 inbox, and an AI auto-responder. Sprints 1–4 built the prototype's nine screens (§2); Sprint 5
-(§15) added the marketing suite the customer chose on 2026-10-02 (D117).
+(§15) added the marketing suite the customer chose on 2026-10-02 (D117); Wave 3 (§16) added
+inbox tools, chatbot flows, new imports, desktop integration and the design system (D122–D125).
 
 ### 1.1 Locked decisions
 
@@ -70,7 +73,7 @@ team inbox, and the WhatsApp Business (Cloud) API.
 Warmup, Spintax, tags and segments, unsubscribe handling and delivery analytics. The customer
 brought all of them into scope (D79, D117); they are specified in §15.
 
-Anything outside §2 and §15 requires an explicit scope change recorded in
+Anything outside §2, §15 and §16 requires an explicit scope change recorded in
 [docs/DECISIONS.md](./docs/DECISIONS.md) and the tracker's deviations log.
 
 ---
@@ -1021,6 +1024,10 @@ bulk-config textareas. Radius: 6px controls, 8px cards, 12px chat bubbles — re
 prototype's inconsistent 0/4/8/12 mix. Spacing on a 4px scale. Icons: **Lucide**, replacing the
 prototype's emoji. Light theme only. Sidebar 200px fixed, matching the prototype.
 
+**Superseded in Wave 3 (D145).** The app now has light, dark and System themes and a grouped,
+collapsible sidebar; the tokens and components are specified in
+[docs/DESIGN-SYSTEM.md](./docs/DESIGN-SYSTEM.md), not here.
+
 ---
 
 ## 8. Sprint 0 — Documentation
@@ -1801,6 +1808,7 @@ E5.71–E5.79 are unused.
 | ID    | Test                                                                          |
 | ----- | ----------------------------------------------------------------------------- |
 | E6.1  | Rule CRUD; a rule needs exactly one of reply text or template                 |
+| E6.1b | Switching a rule off keeps every other setting (D146)                         |
 | E6.2  | `rule:test` applies whole-word matching, match types, priority and devices    |
 | E6.3  | An inbound "price" gets the rule reply, recorded and marked read              |
 | E6.4  | A rule reply means the AI is never consulted; an unmatched message reaches it |
@@ -1862,3 +1870,218 @@ E5.71–E5.79 are unused.
 | E6.68 | Sending & safety settings round-trip and warn on an unlimited cap          |
 | E6.69 | The dashboard charts seven days and its safety notice dismisses for good   |
 | E6.70 | UI: toggling warmup on the Devices screen shows the ramp live              |
+
+---
+
+## 16. Wave 3 — Workspace, automation and design system
+
+**Goal:** an inbox a business can work in all day, automation a non-technical user can build
+without writing rules, imports from the files and phones customers already have, and a modern
+look in light and dark (D122, D124, D125). Built on one foundation commit, then as five
+parallel worktree slices (D98). Merged 2026-10-03 (`a1a4e73`); follow-ups for LID numbers and
+the packaged build to `0e9dddb`. Status per task:
+[docs/TASKS.md §13](./docs/TASKS.md#13-wave-3--workspace-automation-help); decisions D128–D150.
+
+### 16.1 Features
+
+| Area           | Features                                                                                                                                                                                                                                                         | Screen                                        |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Design system  | Tokens with light, dark and System (follows the OS live) themes · title bar with theme toggle · grouped, collapsible sidebar · new primitives · WhatsApp phone preview · Settings › Appearance ([DESIGN-SYSTEM.md](./docs/DESIGN-SYSTEM.md))                     | Every screen, Settings                        |
+| Inbox          | Quick replies (`/` picker, merge tags, use counts) · contact side panel (profile, list fields and tags, campaign history, sequences, private notes) · scheduled messages with an attachment · rich bubbles for every message type · `/inbox?chat=<id>` deep link | Inbox                                         |
+| Chatbot flows  | Visual canvas builder with inspector and plain-English validation · templates (Main menu, Lead capture, FAQ, blank) · keyword, new-chat or any-message trigger · priority and device scope · numbers, buttons or list menus · questions · handoff · Test panel   | Automation › Chatbot flows                    |
+| Welcome & away | Welcome on a chat's first message · away outside weekly hours, with a cooldown                                                                                                                                                                                   | Automation › Welcome & away                   |
+| Hidden numbers | A LID is resolved to the real number wherever WhatsApp allows; otherwise "Number hidden by WhatsApp", repaired automatically when revealed (D129)                                                                                                                | Inbox, Contacts, WA Groups, Automation        |
+| Contacts       | Excel (`.xlsx`) and vCard (`.vcf`) import · WhatsApp contacts grabber from each phone's address book and chats, to a new list · a file picker wherever a path was typed                                                                                          | Contacts, Templates, Status & Channels        |
+| Desktop        | Notifications for new messages · macOS Dock badge, Windows taskbar flash · tray with live counts and Pause all · run in background · start at login · hidden start · Settings › Desktop                                                                          | Settings, the OS tray and notification centre |
+
+No screen was added; there are still 12. Automation's tabs are now Chatbot flows · Keyword
+rules · Welcome & away · Webhooks · Calls, and it still opens on Keyword rules (DV8).
+
+### 16.2 Architecture additions
+
+- **Schema:** migration `20261003090000_inbox_flows_contacts` adds `QuickReply`, `ChatNote`,
+  `ScheduledMessage`, `ChatbotFlow`, `FlowSession`, `WaContact` and `Chat.welcomedAt`,
+  `Chat.lastAwayAt`; `20261003110000_wa_contact_sources` adds `WaContact.inAddressBook`,
+  `hasChat`, `lastChatAt` (D128); `20261003120000` indexes `CampaignRecipient.contactId` and
+  `20261003130000` indexes `Chat.phone` (D129). All are additive and pass `check:migrations`
+  (D90).
+- **IPC:** a new domain, `shared/contract/workspace.ts` — `quickReply:*`, `chat:notes`,
+  `chat:addNote`, `chat:deleteNote`, `chat:profile`, `scheduledMessage:*` (and the
+  `scheduledMessage:changed` event), `flow:*` including `flow:simulate`, `autoreply:getConfig`,
+  `autoreply:setConfig`, `waContacts:list`, `waContacts:export`, `app:getPrefs`,
+  `app:setPrefs` and the `app:navigate` event — plus `system:setThemeSource` in
+  `shared/ipc.ts`. Update schemas use `patchOf()` (D146). The flow graph schema is
+  `shared/flow.ts`.
+- **Transport:** a `contacts` event (`WaSyncedContact[]`, source `addressBook` or `chat`).
+  Baileys forwards history-sync and upserted one-to-one chats, mapping LID chats to phone
+  numbers where WhatsApp supplies the mapping; the mock emits a fixed address book and chat
+  list. Baileys inbound parsing now reads tapped buttons and list rows (D147). A
+  `LidResolver` per account (`transport/lid.ts`) turns every JID into a phone number or the
+  stand-in `<id>@lid`, and a `lidMapping` event lets `services/lid-repair.ts` move a hidden
+  chat, opt-out or call onto the number once it is known (D129).
+- **Inbound pipeline** (`services/inbound.ts`, D130): own-device skip → opt-out → reply
+  attribution → sequence stop → `message.received` webhook → welcome/away → chatbot flows →
+  keyword rules → AI.
+- **Scheduler hub:** two new jobs, `scheduled messages` (D134) and `flows` (session expiry,
+  D132).
+- **Imports:** `services/import/` — one row source per format (`.csv` streamed, `.xlsx` in a
+  worker thread, `.vcf` with our own reader) feeding the one import pipeline, which yields
+  after every batch (D136–D139).
+- **Desktop:** `services/desktop.ts` with `desktop/{prefs,notifications,tray}.ts`; it owns
+  macOS `activate`, and `index.ts` has one `showWindow()` (D142–D144). Its preferences are
+  `app.<field>` rows in `Setting`, cached in memory (DV7).
+- **Theme:** tokens in `renderer/app/globals.css`, `data-theme` on `<html>`, a pre-paint
+  bootstrap script admitted by CSP hash, and `nativeTheme` driven by `system:setThemeSource`
+  (D145).
+- **Dependency added:** `read-excel-file` `9.3.10`, pinned exactly (D138).
+- **Packaged self-test** asserts the wa-service entry, the `.xlsx` worker and the tray icon;
+  main finds wa-service by probing (D150).
+
+### 16.3 Acceptance criteria
+
+- No automated send — flow step, welcome, away or scheduled message — bypasses the throttle,
+  the daily cap or quiet hours. Only a person pressing Send in the inbox is a manual send.
+- Flows, welcome and away never reach a group, a chat opted out of auto-replies or a
+  suppressed number (E8.27, E8.39).
+- A chat in a flow gets the flow's answer and nothing else: no keyword reply, no AI (E8.26).
+- The builder's Test panel produces exactly what a real chat receives (E8.30).
+- Scheduled messages and flow sessions live in SQLite and survive a restart (E8.15, E8.29).
+- A 50,000-row `.xlsx` imports without freezing the app, and long phone numbers survive
+  exactly (E8.43, E8.48).
+- No screen asks the user to type a file path (E8.17, E8.47).
+- A LID's digits are never shown, stored or used as a phone number (E8.82).
+- Message content never reaches a log line or the notification test seam (E8.61).
+- Every screen renders in both themes with no console errors, and the theme is applied before
+  first paint (E7.3, E7.8).
+- Every earlier suite still passes.
+
+### 16.4 E2E tests
+
+Spec files in `tests/e2e/`; the IDs below are the test titles' prefixes. Where one test
+covers several IDs, its title carries the range.
+
+#### Design system — `design-system.spec.ts`
+
+| ID    | Test                                                               |
+| ----- | ------------------------------------------------------------------ |
+| E7.1  | A fresh install follows the operating system ("System")            |
+| E7.2  | Choosing Dark switches the whole app to the dark tokens            |
+| E7.3  | The choice survives a reload and is applied before first paint     |
+| E7.4  | The choice survives a full relaunch                                |
+| E7.5  | "System" follows prefers-color-scheme live, without a reload       |
+| E7.6  | Settings › Appearance mirrors the header, and is keyboard operable |
+| E7.7  | The sidebar is grouped, collapses to icons, and remembers it       |
+| E7.8  | Every screen renders in dark mode with no console errors           |
+| E7.9  | A dialog takes focus, closes on Escape and returns focus           |
+| E7.10 | The phone preview renders WhatsApp formatting in both palettes     |
+
+#### Inbox tools — `inbox-tools.spec.ts`
+
+| ID          | Test                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------ |
+| E8.1–E8.3   | Create, reject a duplicate shortcut, edit and delete a quick reply                   |
+| E8.4–E8.5   | Typing `/` opens the picker; Enter inserts the rendered reply and counts the use     |
+| E8.6–E8.7   | The side panel shows the profile, list fields, tags and campaign history             |
+| E8.8        | Notes are added newest first, deleted after confirming, and survive a restart        |
+| E8.9–E8.11  | Schedule from the composer, reject a past time, cancel before it sends               |
+| E8.12–E8.13 | A due message is sent by the scheduler, with its attachment, and shows in the thread |
+| E8.14       | A scheduled message to an opted-out number fails with a clear reason                 |
+| E8.15       | A message left "sending" by a crash is recovered and sent on the next start          |
+| E8.16       | Injected photo, location and contact messages render as rich bubbles                 |
+| E8.17       | The attach menu picks a sticker with the file picker, no typed path                  |
+| E8.18–E8.19 | `/inbox?chat=` opens that chat; an unknown quick reply shortcut shows a hint         |
+
+#### Chatbot flows, welcome and away — `flows.spec.ts`
+
+| ID    | Test                                                                             |
+| ----- | -------------------------------------------------------------------------------- |
+| E8.20 | Flow CRUD; an invalid graph or a keyword flow without keywords is refused        |
+| E8.21 | A keyword starts the flow and sends the numbered menu                            |
+| E8.22 | A choice by number or by title advances the flow and ends it                     |
+| E8.23 | A reply matching no choice sends the "didn't understand" text and stays          |
+| E8.24 | A question saves the answer and a later step uses it                             |
+| E8.25 | A handoff escalates the chat; the AI bot then stays out                          |
+| E8.26 | Flows answer before keyword rules: a message matching both gets only the flow    |
+| E8.27 | Opted-out and suppressed numbers get nothing from a flow                         |
+| E8.28 | A flow scoped to other devices does not answer this one                          |
+| E8.29 | An unanswered session expires and a late reply is no longer a menu choice        |
+| E8.30 | `flow:simulate` produces exactly what a real chat receives                       |
+| E8.31 | A buttons menu sends real buttons, and a tapped button advances                  |
+| E8.32 | A list menu sends a list; the new-chat trigger fires on the first message only   |
+| E8.33 | Switching a flow off ends its conversations                                      |
+| E8.34 | Builder: start from a template, edit a step, see errors inline, save and list it |
+| E8.35 | Builder test panel chats with the flow without sending anything                  |
+| E8.36 | The welcome message goes out once, on a chat's first message only                |
+| E8.37 | The away message goes out outside business hours and respects its cooldown       |
+| E8.38 | Welcome & away screen saves settings and explains bad hours                      |
+| E8.39 | Welcome and away skip opted-out and suppressed numbers                           |
+
+#### Contacts import and grabber — `contacts-import.spec.ts`
+
+| ID    | Test                                                                       |
+| ----- | -------------------------------------------------------------------------- |
+| E8.40 | The vCard reader handles 2.1/3.0/4.0, folded lines and QUOTED-PRINTABLE    |
+| E8.41 | Spreadsheet cells become text without mangling numbers or dates            |
+| E8.42 | An `.xlsx` preview shows the first sheet with headers and a row count      |
+| E8.43 | An `.xlsx` imports with counts, and phone numbers survive exactly          |
+| E8.44 | A `.vcf` preview offers Name, Phone, Other phones, Email and Company       |
+| E8.45 | A `.vcf` imports one contact per card; a card without a number is reported |
+| E8.46 | Unsupported, old-Excel and missing files get a plain-English error         |
+| E8.47 | The import dialog picks a file with the system dialog, no typing           |
+| E8.48 | A 50,000-row `.xlsx` imports without freezing the app                      |
+| E8.50 | Each phone lists 12 saved contacts, 6 chats, 16 numbers in all             |
+| E8.51 | Search finds by name and by number, however the number is typed            |
+| E8.52 | "Only people with a name" drops the unnamed numbers                        |
+| E8.53 | Pages follow a cursor without repeats or gaps                              |
+| E8.54 | Exporting two phones creates a new list with each number once              |
+| E8.55 | A chats-only export includes the numbers that were never saved             |
+| E8.56 | "Chatted since" keeps only recent chats                                    |
+| E8.57 | A new inbound message adds the sender as a chat contact                    |
+| E8.58 | The grabber dialog shows counts, sources and badges, and searches          |
+| E8.59 | Importing from the dialog creates the list and opens it                    |
+
+E8.49 is unused.
+
+#### Desktop — `desktop.spec.ts`
+
+| ID    | Test                                                                        |
+| ----- | --------------------------------------------------------------------------- |
+| E8.60 | Preferences start from the documented defaults                              |
+| E8.61 | A message arriving while the window is hidden notifies, without its content |
+| E8.62 | Clicking a notification shows the window and asks for that chat             |
+| E8.63 | One chat notifies at most once per 10 seconds                               |
+| E8.64 | No notification when notifications are switched off                         |
+| E8.65 | No notification while the window is in front                                |
+| E8.66 | A burst from many chats collapses into one summary                          |
+| E8.67 | Closing the window hides it to the tray and the app keeps running           |
+| E8.68 | The tray menu shows live device and campaign counts                         |
+| E8.69 | The Settings Desktop section saves each switch                              |
+| E8.70 | `app:navigate` from main opens the named screen                             |
+| E8.71 | Preferences survive a restart                                               |
+| E8.72 | With background running off, closing the window quits (Windows/Linux)       |
+| E8.73 | A `--hidden` launch starts in the tray and a second launch shows it         |
+
+E8.65 skips when the display server does not give the window focus; E8.72 skips on macOS,
+where closing the window never quits. Tray clicks and real OS notifications cannot be driven
+from Playwright (T-1442).
+
+#### Hidden numbers (LID) — `lid.spec.ts`
+
+| ID    | Test                                                                      |
+| ----- | ------------------------------------------------------------------------- |
+| E8.80 | A LID message that carries the number is filed and shown under the number |
+| E8.81 | A LID the mapping store already knows resolves to the number              |
+| E8.82 | An unresolved LID is shown as a hidden number, never as fake digits       |
+| E8.83 | When WhatsApp reveals the number, the hidden chat moves onto it           |
+| E8.84 | A hidden chat for someone who already has a chat is merged into it        |
+| E8.85 | A STOP from a hidden number is honoured, then moves to the real number    |
+| E8.86 | A call from a hidden number is recorded hidden, then repaired             |
+
+E8.74–E8.79 are unused.
+
+---
+
+## 17. Wave 4 — Help system (E9.x), in progress
+
+Setup wizard, help on every screen, guided tours and the Help Center (D123, T-1312–T-1315).
+Specified here when it merges.

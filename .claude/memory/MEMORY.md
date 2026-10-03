@@ -39,9 +39,12 @@ Keep it short — it loads into every session. Decisions with reasoning belong i
   `node_modules/electron`.
 - Never run `npx @electron/asar extract-file` from the repo root — it writes
   `package.json` into the working directory and overwrites ours.
+- `npx tsx file.ts` runs a TypeScript snippet (from the npx cache; not a project dependency).
 
 ## Worktree agents (D98)
 
+- The coordinator runs the full suite on the merged tree; that run's numbers are the ones the
+  tracker records. A worktree agent reports its own spec's results only.
 - A new worktree may start on an old commit: compare with `main` and `git reset --hard main`.
 - Use `cp -al <repo>/node_modules node_modules` — a symlinked `node_modules` makes Turbopack
   fail while `npm run build` **still exits 0**, so E2E silently runs a stale `out/`. Check the
