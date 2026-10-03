@@ -9,12 +9,15 @@ import { join } from 'node:path'
 import { AppError } from '../../../shared/errors'
 import { REQUIRED_CONTACT_FIELDS } from '../../../shared/types'
 import { getPrisma } from '../db/client'
-import { userDataDir } from '../db/paths'
-import { exportCsv, importCsv, previewCsv, type ImportRow } from '../services/csv'
+import {
+  exportsDir,
+  refreshListCount,
+  runContactImport,
+} from '../services/contact-import'
+import { exportCsv, previewCsv } from '../services/csv'
 import { normalizePhone } from '../services/phone'
 import type { WaNumberStatus } from '../../../shared/types'
 import { registerHandler } from './router'
-import { mkdirSync } from 'node:fs'
 
 function parseFields(json: string): string[] {
   try {
@@ -100,13 +103,6 @@ async function duplicatePolicy(): Promise<'skip' | 'overwrite' | 'allow'> {
   })
   const value = setting?.value
   return value === 'overwrite' || value === 'allow' ? value : 'skip'
-}
-
-/** Recount from rows rather than incrementing, so the cache cannot drift. */
-async function refreshCount(listId: string): Promise<number> {
-  const contactCount = await getPrisma().contact.count({ where: { listId } })
-  await getPrisma().contactList.update({ where: { id: listId }, data: { contactCount } })
-  return contactCount
 }
 
 export function registerContactHandlers(): void {
@@ -233,7 +229,7 @@ export function registerContactHandlers(): void {
       },
       include: WITH_TAGS,
     })
-    await refreshCount(listId)
+    await refreshListCount(listId)
     return serializeContact(created)
   })
 
@@ -272,14 +268,14 @@ export function registerContactHandlers(): void {
     if (!existing)
       throw new AppError('NOT_FOUND', { userMessage: 'That contact no longer exists.' })
     await getPrisma().contact.delete({ where: { id } })
-    await refreshCount(existing.listId)
+    await refreshListCount(existing.listId)
     return { ok: true as const }
   })
 
   registerHandler('contacts:bulkDelete', async ({ ids }) => {
     const first = await getPrisma().contact.findUnique({ where: { id: ids[0]! } })
     await getPrisma().contact.deleteMany({ where: { id: { in: ids } } })
-    if (first) await refreshCount(first.listId)
+    if (first) await refreshListCount(first.listId)
     return { ok: true as const }
   })
 
@@ -300,77 +296,14 @@ export function registerContactHandlers(): void {
     'contacts:import',
     async ({ listId, filePath, mapping, duplicatePolicy: policyArg, dialPrefix }) => {
       const list = await requireList(listId)
-      const policy = policyArg ?? (await duplicatePolicy())
-
-      const exportsDir = join(userDataDir(), 'exports')
-      mkdirSync(exportsDir, { recursive: true })
-
-      const prisma = getPrisma()
-
       try {
-        const outcome = await importCsv(filePath, mapping, {
-          ...(dialPrefix ? { dialPrefix } : {}),
-          exportsDir,
-          writeBatch: async (rows: ImportRow[]) => {
-            // Within-file duplicates would otherwise make createMany fail the
-            // whole batch on the unique(listId, phone) constraint.
-            const seen = new Set<string>()
-            const deduped = rows.filter((r) => {
-              if (seen.has(r.phone)) return false
-              seen.add(r.phone)
-              return true
-            })
-            let skipped = rows.length - deduped.length
-
-            if (policy === 'overwrite') {
-              // upsert cannot be batched, so this path is slower by design —
-              // correctness first, and overwriting is not the default.
-              let written = 0
-              await prisma.$transaction(async (tx) => {
-                for (const row of deduped) {
-                  await tx.contact.upsert({
-                    where: { listId_phone: { listId, phone: row.phone } },
-                    create: {
-                      listId,
-                      name: row.name,
-                      phone: row.phone,
-                      data: JSON.stringify(row.data),
-                    },
-                    update: { name: row.name, data: JSON.stringify(row.data) },
-                  })
-                  written += 1
-                }
-              })
-              return { written, skipped }
-            }
-
-            // Prisma's `skipDuplicates` is not supported on SQLite, so
-            // already-present numbers are filtered explicitly. One indexed
-            // query per batch of 1,000 is far cheaper than per-row upserts.
-            const existing = await prisma.contact.findMany({
-              where: { listId, phone: { in: deduped.map((r) => r.phone) } },
-              select: { phone: true },
-            })
-            const present = new Set(existing.map((e) => e.phone))
-            const fresh = deduped.filter((r) => !present.has(r.phone))
-            skipped += deduped.length - fresh.length
-
-            if (fresh.length === 0) return { written: 0, skipped }
-
-            const result = await prisma.contact.createMany({
-              data: fresh.map((row) => ({
-                listId,
-                name: row.name,
-                phone: row.phone,
-                data: JSON.stringify(row.data),
-              })),
-            })
-            return { written: result.count, skipped }
-          },
+        return await runContactImport({
+          listId,
+          filePath,
+          mapping,
+          duplicatePolicy: policyArg ?? (await duplicatePolicy()),
+          dialPrefix,
         })
-
-        await refreshCount(listId)
-        return outcome
       } catch (err) {
         throw new AppError('IMPORT_FAILED', {
           userMessage: err instanceof Error ? err.message : 'The import failed.',
@@ -384,10 +317,8 @@ export function registerContactHandlers(): void {
     const list = await requireList(listId)
     const fields = parseFields(list.fields)
 
-    const exportsDir = join(userDataDir(), 'exports')
-    mkdirSync(exportsDir, { recursive: true })
     const targetPath = join(
-      exportsDir,
+      exportsDir(),
       `${list.name.replace(/[^\w\-. ]+/g, '_')}-${Date.now()}.csv`,
     )
 

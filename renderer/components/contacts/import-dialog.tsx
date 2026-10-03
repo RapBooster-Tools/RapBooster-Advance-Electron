@@ -1,21 +1,29 @@
 'use client'
 
 import { useState } from 'react'
+import {
+  ImportOptions,
+  type CountryAnswer,
+  type DuplicatePolicy,
+  type Preview,
+} from '@renderer/components/contacts/import-options'
 import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
+import { cn } from '@renderer/lib/cn'
 
-interface Preview {
-  headers: string[]
-  sampleRows: string[][]
-  totalRows: number
-}
+type Source = 'csv' | 'sheet'
+
+/** Mirrors the contract's check, so a wrong link gets a useful message here. */
+const SHEET_URL = /^https:\/\/docs\.google\.com\/spreadsheets\//
 
 /**
- * CSV import with an explicit column-mapping step.
+ * Import from a CSV file or a Google Sheet, with an explicit column-mapping
+ * step.
  *
  * The prototype mapped columns by position. Making the user confirm the mapping
  * costs one screen and prevents an exported file with reordered columns from
- * silently writing phone numbers into the name field.
+ * silently writing phone numbers into the name field. Both sources share that
+ * step and the same importer in main.
  */
 export function ImportDialog({
   listId,
@@ -28,29 +36,43 @@ export function ImportDialog({
   onClose: () => void
   onImported: (summary: string) => void
 }) {
+  const [source, setSource] = useState<Source>('csv')
   const [filePath, setFilePath] = useState('')
+  const [sheetUrl, setSheetUrl] = useState('')
   const [preview, setPreview] = useState<Preview>()
   const [mapping, setMapping] = useState<Record<string, string>>({})
-  const [policy, setPolicy] = useState<'skip' | 'overwrite' | 'allow'>('skip')
+  const [policy, setPolicy] = useState<DuplicatePolicy>('skip')
   // Deliberately starts unanswered: there is no default country code, because a
   // list normalized against the wrong one is only discoverable after the
   // messages have gone to the wrong people (REQUIREMENTS §7.5).
-  const [countryAnswer, setCountryAnswer] = useState<'' | 'included' | 'apply'>('')
+  const [countryAnswer, setCountryAnswer] = useState<CountryAnswer>('')
   const [prefix, setPrefix] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
 
+  function switchSource(next: Source) {
+    setSource(next)
+    setPreview(undefined)
+    setMapping({})
+    setError(undefined)
+  }
+
   async function loadPreview() {
-    if (filePath.trim() === '') {
+    if (source === 'csv' && filePath.trim() === '') {
       setError('Choose a CSV file first.')
+      return
+    }
+    if (source === 'sheet' && !SHEET_URL.test(sheetUrl.trim())) {
+      setError('Paste a Google Sheets link (docs.google.com/spreadsheets/…).')
       return
     }
     setBusy(true)
     setError(undefined)
 
-    const result = await window.api.invoke('contacts:importPreview', {
-      filePath: filePath.trim(),
-    })
+    const result =
+      source === 'csv'
+        ? await window.api.invoke('contacts:importPreview', { filePath: filePath.trim() })
+        : await window.api.invoke('contacts:sheetPreview', { url: sheetUrl.trim() })
     setBusy(false)
 
     if (!result.ok) {
@@ -90,13 +112,22 @@ export function ImportDialog({
     setBusy(true)
     setError(undefined)
 
-    const result = await window.api.invoke('contacts:import', {
+    const common = {
       listId,
-      filePath: filePath.trim(),
       mapping,
       duplicatePolicy: policy,
       dialPrefix: countryAnswer === 'apply' ? normalizedPrefix : null,
-    })
+    }
+    const result =
+      source === 'csv'
+        ? await window.api.invoke('contacts:import', {
+            ...common,
+            filePath: filePath.trim(),
+          })
+        : await window.api.invoke('contacts:importSheet', {
+            ...common,
+            url: sheetUrl.trim(),
+          })
     setBusy(false)
 
     if (!result.ok) {
@@ -116,7 +147,7 @@ export function ImportDialog({
     <Dialog
       open
       onClose={onClose}
-      title="Import contacts from CSV"
+      title="Import contacts"
       testId="import-dialog"
       width={640}
       footer={
@@ -140,145 +171,88 @@ export function ImportDialog({
               disabled={busy}
               data-testid="load-preview"
             >
-              {busy ? 'Reading…' : 'Read file'}
+              {busy ? 'Reading…' : source === 'csv' ? 'Read file' : 'Read sheet'}
             </Button>
           )}
         </>
       }
     >
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="csv-path" className="text-xs font-semibold text-ink">
-          CSV file path
-        </label>
-        <input
-          id="csv-path"
-          data-testid="csv-path"
-          value={filePath}
-          onChange={(e) => setFilePath(e.target.value)}
-          placeholder="C:\Users\you\contacts.csv"
-          className="rounded-control border border-line px-2.5 py-2 font-mono text-xs outline-none focus:border-primary"
-        />
+      <div className="mb-3 flex gap-1" role="tablist" aria-label="Import source">
+        {(
+          [
+            ['csv', 'CSV file'],
+            ['sheet', 'Google Sheets'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={source === value}
+            data-testid={`import-source-${value}`}
+            onClick={() => switchSource(value)}
+            className={cn(
+              'rounded-control px-3 py-1 text-xs',
+              source === value
+                ? 'bg-primary font-medium text-white'
+                : 'border border-line text-ink-muted hover:bg-wa-in',
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {preview && (
-        <>
-          <p className="mt-4 text-xs text-ink-muted">
-            {preview.totalRows} rows found. Map each CSV column to a field — unmapped
-            columns are ignored.
+      {source === 'csv' ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="csv-path" className="text-xs font-semibold text-ink">
+            CSV file path
+          </label>
+          <input
+            id="csv-path"
+            data-testid="csv-path"
+            value={filePath}
+            onChange={(e) => setFilePath(e.target.value)}
+            placeholder="C:\Users\you\contacts.csv"
+            className="rounded-control border border-line px-2.5 py-2 font-mono text-xs outline-none focus:border-primary"
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="sheet-url" className="text-xs font-semibold text-ink">
+            Google Sheets link
+          </label>
+          <input
+            id="sheet-url"
+            data-testid="sheet-url"
+            value={sheetUrl}
+            onChange={(e) => {
+              setSheetUrl(e.target.value)
+              setPreview(undefined)
+            }}
+            placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=0"
+            className="rounded-control border border-line px-2.5 py-2 font-mono text-xs outline-none focus:border-primary"
+          />
+          <p className="text-[11px] text-ink-muted">
+            Share the sheet as &ldquo;Anyone with the link can view&rdquo;. The tab in the
+            link is the one imported.
           </p>
+        </div>
+      )}
 
-          <div className="mt-2 flex flex-col gap-2" data-testid="column-mapping">
-            {preview.headers.map((header) => (
-              <div key={header} className="flex items-center gap-2">
-                <span className="w-40 shrink-0 truncate font-mono text-xs text-ink">
-                  {header}
-                </span>
-                <span className="text-ink-subtle">→</span>
-                <select
-                  value={mapping[header] ?? ''}
-                  data-testid={`map-${header}`}
-                  onChange={(e) =>
-                    setMapping((current) => {
-                      const next = { ...current }
-                      if (e.target.value === '') delete next[header]
-                      else next[header] = e.target.value
-                      return next
-                    })
-                  }
-                  className="flex-1 rounded-control border border-line px-2 py-1.5 text-sm outline-none focus:border-primary"
-                >
-                  <option value="">— Ignore —</option>
-                  {fields.map((field) => (
-                    <option key={field} value={field}>
-                      {field}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex flex-col gap-1.5">
-            <label htmlFor="country-answer" className="text-xs font-semibold text-ink">
-              Do these numbers already include their country code?
-            </label>
-            <select
-              id="country-answer"
-              data-testid="country-answer"
-              value={countryAnswer}
-              onChange={(e) => setCountryAnswer(e.target.value as typeof countryAnswer)}
-              className="rounded-control border border-line px-2 py-1.5 text-sm outline-none focus:border-primary"
-            >
-              <option value="">— Choose one —</option>
-              <option value="included">
-                Yes — every number starts with its country code
-              </option>
-              <option value="apply">No — add this country code to all of them</option>
-            </select>
-            {countryAnswer === 'apply' && (
-              <input
-                data-testid="dial-prefix"
-                value={prefix}
-                onChange={(e) => setPrefix(e.target.value)}
-                placeholder="+91"
-                aria-label="Country code to apply"
-                className="mt-1 w-32 rounded-control border border-line px-2.5 py-2 font-mono text-xs outline-none focus:border-primary"
-              />
-            )}
-            <p className="text-[11px] text-ink-muted">
-              There is no default. A number that already starts with <code>+</code> keeps
-              its own country code either way; anything left without one is reported in
-              the error file instead of being guessed at.
-            </p>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-1.5">
-            <label htmlFor="dupe-policy" className="text-xs font-semibold text-ink">
-              When a number already exists in this list
-            </label>
-            <select
-              id="dupe-policy"
-              data-testid="dupe-policy"
-              value={policy}
-              onChange={(e) => setPolicy(e.target.value as typeof policy)}
-              className="rounded-control border border-line px-2 py-1.5 text-sm outline-none focus:border-primary"
-            >
-              <option value="skip">Skip it (keep what is already there)</option>
-              <option value="overwrite">Overwrite it with the imported row</option>
-              <option value="allow">Import anyway where possible</option>
-            </select>
-          </div>
-
-          {preview.sampleRows.length > 0 && (
-            <div className="mt-4 overflow-x-auto rounded-card border border-line">
-              <table className="w-full text-xs">
-                <thead className="bg-app-bg">
-                  <tr>
-                    {preview.headers.map((h) => (
-                      <th
-                        key={h}
-                        className="px-2 py-1.5 text-left font-medium text-ink-muted"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.sampleRows.map((row, i) => (
-                    <tr key={i} className="border-t border-line">
-                      {preview.headers.map((h, j) => (
-                        <td key={h} className="truncate px-2 py-1.5 text-ink">
-                          {row[j] ?? ''}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+      {preview && (
+        <ImportOptions
+          preview={preview}
+          fields={fields}
+          mapping={mapping}
+          onMapping={setMapping}
+          countryAnswer={countryAnswer}
+          onCountryAnswer={setCountryAnswer}
+          prefix={prefix}
+          onPrefix={setPrefix}
+          policy={policy}
+          onPolicy={setPolicy}
+        />
       )}
 
       {error && (
