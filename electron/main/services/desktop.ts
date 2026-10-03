@@ -9,6 +9,7 @@
 import { app, BrowserWindow } from 'electron'
 import { emitToAll } from '../ipc/router'
 import { waBridge } from '../wa-bridge'
+import { campaignEngine } from './campaign-engine'
 import {
   appInForeground,
   Coalescer,
@@ -143,6 +144,14 @@ export function initDesktop(h: DesktopHooks): void {
   // Device and campaign counts for the tray come from the same events that
   // drive the renderer; nothing polls.
   waBridge.on('status', () => scheduleStatusRefresh())
+  // Progress arrives up to once a second per campaign; only a change of
+  // status (started, paused, finished) changes the tray's count.
+  const lastStatus = new Map<string, string>()
+  campaignEngine.onProgress((campaignId, _counters, status) => {
+    if (lastStatus.get(campaignId) === status) return
+    lastStatus.set(campaignId, status)
+    scheduleStatusRefresh()
+  })
   refreshBadge()
 }
 

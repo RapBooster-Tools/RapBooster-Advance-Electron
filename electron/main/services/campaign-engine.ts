@@ -201,10 +201,22 @@ export class CampaignEngine {
   private readonly running = new Map<string, AbortController>()
   private readonly health = new HealthMonitor()
   private readonly slots = new DeviceSlots()
-  private progress: ProgressListener | undefined
+  // A set, not one slot: the renderer bridge and the tray both listen.
+  private readonly progress = new Set<ProgressListener>()
 
   onProgress(listener: ProgressListener): void {
-    this.progress = listener
+    this.progress.add(listener)
+  }
+
+  private emitProgress(...args: Parameters<ProgressListener>): void {
+    for (const listener of this.progress) {
+      try {
+        listener(...args)
+      } catch (err) {
+        // One broken listener must not stop progress reaching the others.
+        console.error('campaign progress listener failed', err)
+      }
+    }
   }
 
   isRunning(campaignId: string): boolean {
@@ -564,7 +576,7 @@ export class CampaignEngine {
       where: { id: campaignId },
       data: { sentCount: c.sent, failedCount: c.failed, totalCount: c.total },
     })
-    this.progress?.(campaignId, c, row.status as CampaignStatus)
+    this.emitProgress(campaignId, c, row.status as CampaignStatus)
   }
 
   /**
@@ -575,7 +587,11 @@ export class CampaignEngine {
   async publish(campaignId: string): Promise<void> {
     const row = await getPrisma().campaign.findUnique({ where: { id: campaignId } })
     if (!row) return
-    this.progress?.(campaignId, await counters(campaignId), row.status as CampaignStatus)
+    this.emitProgress(
+      campaignId,
+      await counters(campaignId),
+      row.status as CampaignStatus,
+    )
   }
 
   private async finish(campaignId: string): Promise<void> {
@@ -598,7 +614,7 @@ export class CampaignEngine {
         ...(status === 'completed' ? { completedAt: new Date() } : {}),
       },
     })
-    this.progress?.(campaignId, c, (status ?? 'running') as CampaignStatus)
+    this.emitProgress(campaignId, c, (status ?? 'running') as CampaignStatus)
 
     if (status === 'completed' && current?.status === 'running') {
       await emitWebhook('campaign.completed', {

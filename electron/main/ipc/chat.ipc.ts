@@ -12,6 +12,7 @@ import { decodeButtons } from '../../../shared/template-buttons'
 import type { MessageType, TemplateButton } from '../../../shared/types'
 import { getPrisma } from '../db/client'
 import { prepareInboxRich } from '../services/inbox-rich'
+import { refreshBadge } from '../services/desktop/notifications'
 import { waBridge } from '../wa-bridge'
 import { registerHandler } from './router'
 
@@ -303,6 +304,7 @@ export function registerChatHandlers(): void {
 
   registerHandler('chat:markRead', async ({ chatId }) => {
     await getPrisma().chat.update({ where: { id: chatId }, data: { unreadCount: 0 } })
+    refreshBadge()
     return { ok: true as const }
   })
 
@@ -351,12 +353,23 @@ export async function persistIncoming(
   const existing = await prisma.message.findUnique({ where: { id: incoming.id } })
   if (existing) return null
 
+  // WHY: a group is named by its subject, never by whichever member wrote
+  // last — the sender's push name would rename the group on every message.
+  const groupName = incoming.isGroup
+    ? ((
+        await prisma.group.findUnique({
+          where: { id: incoming.chatId },
+          select: { name: true },
+        })
+      )?.name ?? 'Group')
+    : null
+
   await prisma.chat.upsert({
     where: { id: incoming.chatId },
     create: {
       id: incoming.chatId,
       deviceId,
-      name: incoming.pushName ?? incoming.from,
+      name: groupName ?? incoming.pushName ?? incoming.from,
       // A group's "phone" is its id; `from` is the member who wrote.
       phone: incoming.isGroup
         ? (incoming.chatId.split('@')[0] ?? incoming.chatId)
@@ -368,7 +381,7 @@ export async function persistIncoming(
     },
     update: {
       // A pushName can appear later than the first message.
-      ...(incoming.pushName ? { name: incoming.pushName } : {}),
+      ...(!incoming.isGroup && incoming.pushName ? { name: incoming.pushName } : {}),
       lastMessage: incoming.body,
       lastMessageAt: new Date(incoming.timestamp),
       unreadCount: { increment: 1 },
