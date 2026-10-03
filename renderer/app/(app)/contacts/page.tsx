@@ -6,6 +6,7 @@ import { ContactsView } from '@renderer/components/contacts/contacts-view'
 import { CreateListDialog } from '@renderer/components/contacts/list-dialogs'
 import { OptOutPanel } from '@renderer/components/contacts/optout-panel'
 import { TagManagerDialog } from '@renderer/components/contacts/tag-manager-dialog'
+import { WaImportDialog } from '@renderer/components/contacts/wa-import-dialog'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState } from '@renderer/components/ui/empty-state'
@@ -40,6 +41,7 @@ export default function ContactsPage() {
   const [activeId, setActiveId] = useState<string>()
   const [creatingList, setCreatingList] = useState(false)
   const [managingTags, setManagingTags] = useState(false)
+  const [grabbing, setGrabbing] = useState(false)
 
   const all = listData ?? []
   const allTags = tagData ?? []
@@ -95,11 +97,19 @@ export default function ContactsPage() {
         <EmptyState
           icon={ContactIcon}
           title="No contact lists yet."
-          description="Create a list, then add contacts by hand or import a CSV or Google Sheet."
+          description="Create a list, then add contacts by hand or import a CSV, Excel or contact-card file or a Google Sheet — or copy the contacts and chats of a linked WhatsApp number."
           action={
-            <Button variant="primary" onClick={() => setCreatingList(true)}>
-              + New List
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={() => setCreatingList(true)}>
+                + New List
+              </Button>
+              <Button
+                onClick={() => setGrabbing(true)}
+                data-testid="empty-import-whatsapp"
+              >
+                Import from WhatsApp
+              </Button>
+            </div>
           }
         />
       ) : (
@@ -136,6 +146,7 @@ export default function ContactsPage() {
                 lists.refetch()
                 tags.refetch()
               }}
+              onImportFromWhatsApp={() => setGrabbing(true)}
             />
           )}
         </div>
@@ -149,6 +160,17 @@ export default function ContactsPage() {
             lists.refetch()
           }}
           onClose={() => setCreatingList(false)}
+        />
+      )}
+
+      {grabbing && (
+        <WaImportDialog
+          onClose={() => setGrabbing(false)}
+          onImported={(id) => {
+            setActiveId(id)
+            setView('contacts')
+            lists.refetch()
+          }}
         />
       )}
 

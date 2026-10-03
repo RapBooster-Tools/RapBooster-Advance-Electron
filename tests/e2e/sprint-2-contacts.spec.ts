@@ -300,10 +300,13 @@ test('E2.14b — national numbers are rejected, not guessed, when none is chosen
 test('E2.14c — the import dialog refuses to run until the country code is answered', async () => {
   const dir = newUserDataDir()
   const files = mkdtempSync(join(tmpdir(), 'rapbooster-csv-'))
-  const { app, win } = await launchLicensed(dir)
+  const csv = writeCsv(files, 'ui.csv', ['Name,Mobile', 'Asha,9876543210'])
+  // The file is chosen through the native dialog; RB_PICK_FILE answers it.
+  process.env.RB_PICK_FILE = csv
+  const { app, win } = await launchLicensed(dir).finally(() => {
+    delete process.env.RB_PICK_FILE
+  })
   try {
-    const csv = writeCsv(files, 'ui.csv', ['Name,Mobile', 'Asha,9876543210'])
-
     await win.evaluate(() =>
       window.api.invoke('contactList:create', { name: 'UI', customFields: [] }),
     )
@@ -311,7 +314,8 @@ test('E2.14c — the import dialog refuses to run until the country code is answ
     await win.getByTestId('list-tab-UI').click()
     await win.getByTestId('import-contacts').click()
 
-    await win.getByTestId('csv-path').fill(csv)
+    await win.getByTestId('import-file').click()
+    await expect(win.getByTestId('import-file-name')).toHaveText('ui.csv')
     await win.getByTestId('load-preview').click()
     await expect(win.getByTestId('country-answer')).toBeVisible()
 

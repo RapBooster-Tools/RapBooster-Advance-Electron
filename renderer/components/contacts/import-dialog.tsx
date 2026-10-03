@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { FilePickerField } from '@renderer/components/common/file-picker-field'
 import {
   ImportOptions,
   type CountryAnswer,
@@ -11,13 +12,51 @@ import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { cn } from '@renderer/lib/cn'
 
-type Source = 'csv' | 'sheet'
+type Source = 'file' | 'sheet'
 
 /** Mirrors the contract's check, so a wrong link gets a useful message here. */
 const SHEET_URL = /^https:\/\/docs\.google\.com\/spreadsheets\//
 
+const IMPORT_FILTERS = [
+  { name: 'Contact files', extensions: ['csv', 'xlsx', 'vcf'] },
+  { name: 'CSV', extensions: ['csv'] },
+  { name: 'Excel workbook', extensions: ['xlsx'] },
+  { name: 'Contact cards (vCard)', extensions: ['vcf'] },
+]
+
+/** Column names people use for a phone number, beyond the field's own name. */
+const PHONE_HEADERS = [
+  'phone',
+  'mobile',
+  'mobile number',
+  'phone number',
+  'number',
+  'whatsapp',
+  'whatsapp number',
+  'contact',
+  'contact number',
+  'cell',
+]
+
 /**
- * Import from a CSV file or a Google Sheet, with an explicit column-mapping
+ * Pre-map a header to a field whose name matches it, case-insensitively, and
+ * any of the usual phone column names to Mobile. The user still sees and
+ * confirms every mapping.
+ */
+function guessMapping(headers: string[], fields: string[]): Record<string, string> {
+  const guessed: Record<string, string> = {}
+  for (const header of headers) {
+    const h = header.trim().toLowerCase()
+    const match =
+      fields.find((f) => f.toLowerCase() === h) ??
+      (PHONE_HEADERS.includes(h) && fields.includes('Mobile') ? 'Mobile' : undefined)
+    if (match && !Object.values(guessed).includes(match)) guessed[header] = match
+  }
+  return guessed
+}
+
+/**
+ * Import from a file (CSV, Excel or vCard) or a Google Sheet, with an explicit column-mapping
  * step.
  *
  * The prototype mapped columns by position. Making the user confirm the mapping
@@ -36,7 +75,7 @@ export function ImportDialog({
   onClose: () => void
   onImported: (summary: string) => void
 }) {
-  const [source, setSource] = useState<Source>('csv')
+  const [source, setSource] = useState<Source>('file')
   const [filePath, setFilePath] = useState('')
   const [sheetUrl, setSheetUrl] = useState('')
   const [preview, setPreview] = useState<Preview>()
@@ -58,8 +97,8 @@ export function ImportDialog({
   }
 
   async function loadPreview() {
-    if (source === 'csv' && filePath.trim() === '') {
-      setError('Choose a CSV file first.')
+    if (source === 'file' && filePath === '') {
+      setError('Choose a file first.')
       return
     }
     if (source === 'sheet' && !SHEET_URL.test(sheetUrl.trim())) {
@@ -70,8 +109,8 @@ export function ImportDialog({
     setError(undefined)
 
     const result =
-      source === 'csv'
-        ? await window.api.invoke('contacts:importPreview', { filePath: filePath.trim() })
+      source === 'file'
+        ? await window.api.invoke('contacts:importPreview', { filePath })
         : await window.api.invoke('contacts:sheetPreview', { url: sheetUrl.trim() })
     setBusy(false)
 
@@ -81,14 +120,7 @@ export function ImportDialog({
     }
 
     setPreview(result.data)
-    // Pre-map headers whose name matches a field, case-insensitively. The user
-    // still sees and confirms every mapping.
-    const guessed: Record<string, string> = {}
-    for (const header of result.data.headers) {
-      const match = fields.find((f) => f.toLowerCase() === header.trim().toLowerCase())
-      if (match) guessed[header] = match
-    }
-    setMapping(guessed)
+    setMapping(guessMapping(result.data.headers, fields))
   }
 
   async function runImport() {
@@ -119,11 +151,8 @@ export function ImportDialog({
       dialPrefix: countryAnswer === 'apply' ? normalizedPrefix : null,
     }
     const result =
-      source === 'csv'
-        ? await window.api.invoke('contacts:import', {
-            ...common,
-            filePath: filePath.trim(),
-          })
+      source === 'file'
+        ? await window.api.invoke('contacts:import', { ...common, filePath })
         : await window.api.invoke('contacts:importSheet', {
             ...common,
             url: sheetUrl.trim(),
@@ -171,7 +200,7 @@ export function ImportDialog({
               disabled={busy}
               data-testid="load-preview"
             >
-              {busy ? 'Reading…' : source === 'csv' ? 'Read file' : 'Read sheet'}
+              {busy ? 'Reading…' : source === 'file' ? 'Read file' : 'Read sheet'}
             </Button>
           )}
         </>
@@ -180,7 +209,7 @@ export function ImportDialog({
       <div className="mb-3 flex gap-1" role="tablist" aria-label="Import source">
         {(
           [
-            ['csv', 'CSV file'],
+            ['file', 'From a file'],
             ['sheet', 'Google Sheets'],
           ] as const
         ).map(([value, label]) => (
@@ -203,19 +232,35 @@ export function ImportDialog({
         ))}
       </div>
 
-      {source === 'csv' ? (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="csv-path" className="text-xs font-semibold text-ink">
-            CSV file path
-          </label>
-          <input
-            id="csv-path"
-            data-testid="csv-path"
+      {source === 'file' ? (
+        <div className="flex flex-col gap-2">
+          <FilePickerField
+            label="Contacts file"
             value={filePath}
-            onChange={(e) => setFilePath(e.target.value)}
-            placeholder="C:\Users\you\contacts.csv"
-            className="rounded-control border border-line px-2.5 py-2 font-mono text-xs outline-none focus:border-primary"
+            onChange={(path) => {
+              setFilePath(path)
+              setPreview(undefined)
+              setError(undefined)
+            }}
+            filters={IMPORT_FILTERS}
+            dialogTitle="Choose a contacts file"
+            testId="import-file"
           />
+          <ul className="list-disc pl-5 text-[11px] text-ink-muted">
+            <li>
+              <strong>CSV (.csv)</strong> — exported from Excel, Google Sheets or most
+              apps. The first row holds the column names.
+            </li>
+            <li>
+              <strong>Excel (.xlsx)</strong> — the first sheet is imported, first row as
+              column names. Long phone numbers are kept exactly as typed.
+            </li>
+            <li>
+              <strong>Contact cards (.vcf)</strong> — exported from a phone or from
+              Google/Outlook contacts. Each card becomes one contact; its mobile number is
+              used, and any other numbers are kept in &ldquo;Other phones&rdquo;.
+            </li>
+          </ul>
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">

@@ -1,16 +1,12 @@
 'use client'
 
 /** The type-specific part of the template dialog for the rich types (D89). */
+import { FilePickerField } from '@renderer/components/common/file-picker-field'
+import { MEDIA_FILTERS } from '@renderer/components/common/media-filters'
 import type { TemplateType } from '@shared/types'
 import { ProductPicker } from './product-picker'
 import type { RichDraft } from './rich-draft'
-import {
-  ContactFields,
-  EventFields,
-  FilePathField,
-  LocationFields,
-  PollFields,
-} from './rich-fields'
+import { ContactFields, EventFields, LocationFields, PollFields } from './rich-fields'
 
 export function RichTemplateFields({
   type,
@@ -28,24 +24,24 @@ export function RichTemplateFields({
   switch (type) {
     case 'voice':
       return (
-        <FilePathField
-          id="tpl-file-path"
-          label="Audio file path"
-          placeholder="C:\Users\you\greeting.ogg"
+        <FilePickerField
+          testId="tpl-file-path"
+          label="Audio file"
           hint="Arrives as a voice note. OGG/Opus plays natively; MP3, M4A, AAC and WAV send as audio. Up to 16 MB. The file is copied into the app."
           value={filePath}
           onChange={onFilePathChange}
+          filters={MEDIA_FILTERS.audio}
         />
       )
     case 'sticker':
       return (
-        <FilePathField
-          id="tpl-file-path"
-          label="Sticker file path (.webp)"
-          placeholder="C:\Users\you\sticker.webp"
+        <FilePickerField
+          testId="tpl-file-path"
+          label="Sticker file (.webp)"
           hint="WhatsApp stickers must be WebP, up to 1 MB (512×512 works best). The file is copied into the app."
           value={filePath}
           onChange={onFilePathChange}
+          filters={MEDIA_FILTERS.sticker}
         />
       )
     case 'location':

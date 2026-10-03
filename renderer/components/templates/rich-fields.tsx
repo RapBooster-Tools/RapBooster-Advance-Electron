@@ -277,7 +277,10 @@ export function EventFields({
   )
 }
 
-/** A file path, following the media template's input (there is no native picker channel). */
+/**
+ * A typed file path. Only the inbox composer still uses it; every other screen
+ * uses FilePickerField (renderer/components/common), and so should this one.
+ */
 export function FilePathField({
   id,
   label,

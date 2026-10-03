@@ -2,6 +2,8 @@
 
 import { FileText } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { FilePickerField } from '@renderer/components/common/file-picker-field'
+import { MEDIA_FILTERS } from '@renderer/components/common/media-filters'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -213,7 +215,7 @@ export default function TemplatesPage() {
       // anything typed before switching type is not saved with them.
       content: hasText ? content : '',
       ...(extra.value ? { extra: extra.value } : {}),
-      ...(type === 'media' ? { mediaType, mediaSourcePath: mediaPath.trim() } : {}),
+      ...(type === 'media' ? { mediaType, mediaSourcePath: mediaPath } : {}),
       ...(FILE_TEMPLATE_TYPES.includes(type)
         ? { mediaSourcePath: mediaPath.trim() }
         : {}),
@@ -477,26 +479,14 @@ export default function TemplatesPage() {
                     <option value="video">Video</option>
                   </select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="tpl-media-path"
-                    className="text-xs font-semibold text-ink"
-                  >
-                    File path
-                  </label>
-                  <input
-                    id="tpl-media-path"
-                    data-testid="tpl-media-path"
-                    value={mediaPath}
-                    onChange={(e) => setMediaPath(e.target.value)}
-                    placeholder="C:\Users\you\promo.png"
-                    className="rounded-control border border-line px-2.5 py-2 font-mono text-xs outline-none focus:border-primary"
-                  />
-                  <p className="text-xs text-ink-subtle">
-                    The file is copied into the app so it keeps working if you move the
-                    original.
-                  </p>
-                </div>
+                <FilePickerField
+                  label="File"
+                  hint="The file is copied into the app so it keeps working if you move the original."
+                  value={mediaPath}
+                  onChange={setMediaPath}
+                  filters={MEDIA_FILTERS[mediaType]}
+                  testId="tpl-media-path"
+                />
               </>
             )}
 

@@ -27,11 +27,14 @@ export function ContactsView({
   list,
   tags,
   onChanged,
+  onImportFromWhatsApp,
 }: {
   list: ContactList
   tags: TagInfo[]
   /** Counts changed: lists and tags should refetch. */
   onChanged: () => void
+  /** Opens the WhatsApp grabber, which always creates a new list. */
+  onImportFromWhatsApp: () => void
 }) {
   const toast = useToast()
   const [search, setSearch] = useState('')
@@ -149,6 +152,9 @@ export function ContactsView({
           data-testid="import-contacts"
         >
           Import
+        </Button>
+        <Button size="sm" onClick={onImportFromWhatsApp} data-testid="import-whatsapp">
+          Import from WhatsApp
         </Button>
         <Button size="sm" onClick={() => void exportList()} data-testid="export-contacts">
           Export CSV

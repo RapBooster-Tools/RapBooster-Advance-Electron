@@ -9,6 +9,7 @@
 import { createReadStream, createWriteStream, existsSync, statSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
+import type { RowSource } from './import/row-source'
 import { normalizePhone, type DialPrefix } from './phone'
 
 export const IMPORT_BATCH_SIZE = 1_000
@@ -125,26 +126,18 @@ export interface ImportDeps {
 }
 
 /**
- * Stream a CSV into contact rows.
+ * Map, normalise and persist rows from any import source.
  *
- * `mapping` maps a CSV header to a list field name. It is explicit rather than
- * positional (which is what the prototype did) because a column order change in
- * an exported file would otherwise silently shuffle everyone's data.
+ * `mapping` maps a source header to a list field name. It is explicit rather
+ * than positional (which is what the prototype did) because a column order
+ * change in an exported file would otherwise silently shuffle everyone's data.
  */
-export async function importCsv(
-  filePath: string,
+export async function importRows(
+  source: RowSource,
   mapping: Record<string, string>,
   deps: ImportDeps,
-  total = 0,
 ): Promise<ImportOutcome> {
-  if (!existsSync(filePath)) throw new Error('File not found')
-
-  const reader = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  })
-
-  let headers: string[] = []
+  const { headers, totalRows: total } = source
   let batch: ImportRow[] = []
   let imported = 0
   let skipped = 0
@@ -161,51 +154,51 @@ export async function importCsv(
     batch = []
   }
 
-  for await (const line of reader) {
-    if (line.trim() === '') continue
+  try {
+    for await (const cells of source.rows) {
+      processed += 1
+      const record: Record<string, string> = {}
 
-    if (headers.length === 0) {
-      headers = parseCsvLine(line)
-      continue
+      headers.forEach((header, index) => {
+        const field = mapping[header]
+        if (field) record[field] = cells[index] ?? ''
+      })
+
+      const rawPhone = record.Mobile ?? ''
+      const normalized = normalizePhone(rawPhone, deps.dialPrefix)
+
+      if (!normalized.valid || !normalized.e164) {
+        invalid += 1
+        // Row number is 1-based and counts the header, matching what a
+        // spreadsheet shows the user.
+        errors.push(
+          `${processed + 1},${toCsvValue(rawPhone)},${toCsvValue(normalized.reason ?? 'invalid')}`,
+        )
+        continue
+      }
+
+      record.Mobile = normalized.e164
+      batch.push({
+        name: record.Name ?? '',
+        phone: normalized.e164,
+        data: record,
+      })
+
+      if (batch.length >= IMPORT_BATCH_SIZE) {
+        await flush()
+        deps.onProgress?.(processed, total)
+        // NOTE: rows already in memory (an .xlsx from the worker) and the
+        // synchronous SQLite driver resolve entirely in microtasks, which would
+        // starve every IPC call until the whole import ends. One macrotask
+        // turn per batch keeps the app responsive.
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
     }
 
-    processed += 1
-    const cells = parseCsvLine(line)
-    const record: Record<string, string> = {}
-
-    headers.forEach((header, index) => {
-      const field = mapping[header]
-      if (field) record[field] = cells[index] ?? ''
-    })
-
-    const rawPhone = record.Mobile ?? ''
-    const normalized = normalizePhone(rawPhone, deps.dialPrefix)
-
-    if (!normalized.valid || !normalized.e164) {
-      invalid += 1
-      // Row number is 1-based and counts the header, matching what a
-      // spreadsheet shows the user.
-      errors.push(
-        `${processed + 1},${toCsvValue(rawPhone)},${toCsvValue(normalized.reason ?? 'invalid')}`,
-      )
-      continue
-    }
-
-    record.Mobile = normalized.e164
-    batch.push({
-      name: record.Name ?? '',
-      phone: normalized.e164,
-      data: record,
-    })
-
-    if (batch.length >= IMPORT_BATCH_SIZE) {
-      await flush()
-      deps.onProgress?.(processed, total)
-    }
+    await flush()
+  } finally {
+    await source.close()
   }
-
-  await flush()
-  reader.close()
   deps.onProgress?.(processed, total)
 
   let errorReportPath: string | null = null

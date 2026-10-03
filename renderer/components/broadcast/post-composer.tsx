@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { FilePickerField } from '@renderer/components/common/file-picker-field'
+import { MEDIA_FILTERS } from '@renderer/components/common/media-filters'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
@@ -187,25 +189,14 @@ export function PostComposer({
       )}
 
       {kind !== 'text' && (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="post-media" className={LABEL}>
-            {kind === 'image' ? 'Image' : 'Video'} file path
-          </label>
-          <input
-            id="post-media"
-            data-testid="post-media"
-            value={mediaPath}
-            onChange={(e) => setMediaPath(e.target.value)}
-            placeholder={
-              kind === 'image' ? 'C:\\Users\\you\\promo.jpg' : 'C:\\Users\\you\\promo.mp4'
-            }
-            className={cn(FIELD, 'font-mono text-xs')}
-          />
-          <p className="text-xs text-ink-subtle">
-            The file is copied into the app, so a scheduled post still works if you move
-            the original.
-          </p>
-        </div>
+        <FilePickerField
+          label={kind === 'image' ? 'Image' : 'Video'}
+          hint="The file is copied into the app, so a scheduled post still works if you move the original."
+          value={mediaPath}
+          onChange={setMediaPath}
+          filters={MEDIA_FILTERS[kind === 'image' ? 'image' : 'video']}
+          testId="post-media"
+        />
       )}
 
       {target === 'status' && (
