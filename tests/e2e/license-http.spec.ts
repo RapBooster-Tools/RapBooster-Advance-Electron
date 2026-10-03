@@ -217,9 +217,18 @@ test('E1.21 — an explicit revocation is honoured immediately, not given grace'
       status: 200,
       body: JSON.stringify({ status: 'revoked', message: 'Licence revoked' }),
     }
-    const revalidated = await win.evaluate(() => window.api.invoke('license:revalidate'))
-    expect(revalidated.ok).toBe(true)
-    if (revalidated.ok) expect(revalidated.data.status).toBe('revoked')
+    // Fire and forget: honouring the revocation swaps this window back to the
+    // activation screen, which can land before the invoke's reply and destroy
+    // the page that awaited it. The swap itself is what proves "immediately".
+    await win.evaluate(() => {
+      void window.api.invoke('license:revalidate')
+    })
+    await win
+      .getByTestId('license-key')
+      .waitFor({ state: 'visible', timeout: APP_READY_TIMEOUT_MS })
+    const status = await win.evaluate(() => window.api.invoke('license:status'))
+    expect(status.ok).toBe(true)
+    if (status.ok) expect(status.data.status).toBe('revoked')
   } finally {
     await app.close()
     cleanupUserDataDir(dir)

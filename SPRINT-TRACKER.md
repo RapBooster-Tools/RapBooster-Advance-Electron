@@ -19,19 +19,19 @@ Last updated: **2026-10-03**
 
 ## 1. Status dashboard
 
-| Milestone                             | Scope                                                                          | Status         | Dates         | E2E (pass / fail / skip) | Commit              |
-| ------------------------------------- | ------------------------------------------------------------------------------ | -------------- | ------------- | ------------------------ | ------------------- |
-| Sprint 0                              | Documentation                                                                  | 🟢 Complete    | 07-27         | n/a                      | `9968d08`           |
-| Sprint 1                              | Foundation · licensing · shell                                                 | 🟢 Complete    | 07-27 → 07-28 | 28 / 0 / 0               | `f095b16`           |
-| Sprint 2                              | Devices · contacts · templates                                                 | 🟢 Complete    | 07-28         | 49 / 0 / 0               | `a51bff7`           |
-| Sprint 3                              | Campaign engine · groups                                                       | 🟢 Complete    | 07-28         | +16, all pass            | `922b14a`           |
-| Sprint 4                              | Inbox · AI · settings · dashboard (release proof → Release)                    | 🟢 Complete    | 07-28         | 99 / 0 / 1               | —                   |
-| Hardening pass                        | Four defects, audit, graph                                                     | 🟢 Complete    | 10-02         | 101 / 2 env / 1          | `da61f68`           |
-| Dependencies + macOS                  | Latest stable deps, Mac target, in-repo memory                                 | 🟢 Complete    | 10-02         | 101 / 2 env / 1          | `c0f5759`           |
-| **Wave D89 — marketing suite**        | Foundation + nine feature slices (SPRINTS §15)                                 | 🟢 Complete    | 10-02 → 10-03 | 214 / 4 → 2 env / 1      | `e205734` `9981076` |
-| **Wave 3 — workspace and automation** | Design system, inbox tools, flows, imports, desktop, LID numbers (SPRINTS §16) | 🟢 Complete    | 10-03         | 291 / 2 env / 1, then +7 | `a1a4e73` `0e9dddb` |
-| Wave 4 — help system                  | Setup wizard, help on every screen, tours, Help Center (D123)                  | 🟡 In progress | 10-03 →       | —                        | —                   |
-| Release                               | Signed builds, update feed, real license API                                   | 🔴 Blocked     | —             | —                        | —                   |
+| Milestone                             | Scope                                                                          | Status      | Dates         | E2E (pass / fail / skip) | Commit              |
+| ------------------------------------- | ------------------------------------------------------------------------------ | ----------- | ------------- | ------------------------ | ------------------- |
+| Sprint 0                              | Documentation                                                                  | 🟢 Complete | 07-27         | n/a                      | `9968d08`           |
+| Sprint 1                              | Foundation · licensing · shell                                                 | 🟢 Complete | 07-27 → 07-28 | 28 / 0 / 0               | `f095b16`           |
+| Sprint 2                              | Devices · contacts · templates                                                 | 🟢 Complete | 07-28         | 49 / 0 / 0               | `a51bff7`           |
+| Sprint 3                              | Campaign engine · groups                                                       | 🟢 Complete | 07-28         | +16, all pass            | `922b14a`           |
+| Sprint 4                              | Inbox · AI · settings · dashboard (release proof → Release)                    | 🟢 Complete | 07-28         | 99 / 0 / 1               | —                   |
+| Hardening pass                        | Four defects, audit, graph                                                     | 🟢 Complete | 10-02         | 101 / 2 env / 1          | `da61f68`           |
+| Dependencies + macOS                  | Latest stable deps, Mac target, in-repo memory                                 | 🟢 Complete | 10-02         | 101 / 2 env / 1          | `c0f5759`           |
+| **Wave D89 — marketing suite**        | Foundation + nine feature slices (SPRINTS §15)                                 | 🟢 Complete | 10-02 → 10-03 | 214 / 4 → 2 env / 1      | `e205734` `9981076` |
+| **Wave 3 — workspace and automation** | Design system, inbox tools, flows, imports, desktop, LID numbers (SPRINTS §16) | 🟢 Complete | 10-03         | 291 / 2 env / 1, then +7 | `a1a4e73` `0e9dddb` |
+| Wave 4 — help system                  | Setup wizard, help on every screen, tours, Help Center (SPRINTS §17)           | 🟢 Complete | 10-03         | 317 / 2 env / 1          | `2f91e58`           |
+| Release                               | Signed builds, update feed, real license API                                   | 🔴 Blocked  | —             | —                        | —                   |
 
 All dates 2026. **Legend:** ⬜ Not started · 🟡 In progress · 🟢 Complete · 🔴 Blocked ·
 ⚪ Deferred. "env" failures are E1.2 and E4.17, which need an OS keyring (K11). Per-task status
@@ -48,8 +48,16 @@ is in [docs/TASKS.md](./docs/TASKS.md).
 > (D150). The merged tree passes 291 of 294 E2E tests: two need an OS keyring (K11), one is
 > the PERF-gated skip; the 7 LID tests pass.
 >
-> **Now:** Wave 4, the help system — setup wizard, help on every screen, guided tours and the
-> Help Center (D123, [TASKS §13](./docs/TASKS.md#13-wave-3--workspace-automation-help)).
+> **Then (same day):** Wave 4, the help system, is merged (`2f91e58`, SPRINTS §17,
+> D153–D157): help on every screen ("?" and F1), tips beside every setting, guided tours, a
+> first-run welcome with a self-ticking checklist, a Help Center and a generated user guide.
+> Customer decisions since: welcome/away and then every customer reply ignore quiet hours,
+> which now hold campaign-style sending only (D151, D152); Remove device deletes a device and
+> its data, archiving one that campaign reports reference (D158). The full suite at
+> `2f91e58`: 317 of 322 pass — K11's two, one PERF skip, and two test races fixed after.
+>
+> **Now:** the known gaps in [TASKS §14](./docs/TASKS.md#14-known-gaps) and the release
+> blockers below.
 >
 > **Blocked on the customer, and the only thing between this and a release:** the license
 > server API, a Windows signing certificate, an Apple Developer ID with a Mac build machine,
@@ -158,6 +166,9 @@ suite. "n/r" means the check was not recorded for that run.
 | 2026-10-03 | **D89 wave, merged**     | 115 | 104        | **214 pass / 4 fail / 1 skipped** | n/r       | n/r  | n/r            | 219 tests. Failures: E1.2, E4.17 (K11) and E5.69, E6.10 — both fixed in `9981076`, 30/30 on re-run. Each agent's own suite was green in its worktree                                                                                                                                                                                                                                                               |
 | 2026-10-03 | **Wave 3, merged**       | 75  | 219        | **291 pass / 2 fail / 1 skipped** | ✅        | ✅   | n/r            | `a1a4e73`, 294 tests, 19.7 min. New: E7.1–E7.10, E8.1–E8.73 (E8.49 unused), E6.1b. The 2 failures are E1.2 (with E1.7) and E4.17 — K11, no OS keyring. Lint: 0 errors, the known `useVirtualizer` warning. Self-test runs after the help-system merge (T-1605)                                                                                                                                                     |
 | 2026-10-03 | LID numbers + fixes      | 7   | 62         | 7 pass + 62/62                    | n/r       | n/r  | n/r            | `0e9dddb`, 301 tests. E8.80–E8.86, with automation, group-tools, sprint-4-inbox and audience re-run. Full suite not re-run                                                                                                                                                                                                                                                                                         |
+| 2026-10-03 | Quiet hours D152         | 1   | 121        | 120 pass / 1 fail                 | ✅        | ✅   | n/r            | `22fb3f9`. Ten affected suites. The failure was E5.41 under load; the whole rich-messages spec then ran 11/11. E6.10, E6.48 rewritten, E8.37b added                                                                                                                                                                                                                                                                |
+| 2026-10-03 | **Wave 4, merged**       | 21  | 301        | **317 pass / 4 fail / 1 skipped** | ✅        | ✅   | ✅ self-test   | `2f91e58`, 322 tests, 19.4 min. New: E9.1–E9.20 (+ tooltip check in E9.7). Failures: E1.2, E4.17 (K11); E8.29 and E1.21 were test races, fixed in the next commit and re-run 2× (flows 42/42, license-http 2× green). Packaged self-test passed at `0e9dddb` (wa-service entry, xlsx worker, tray icon)                                                                                                            |
+| 2026-10-03 | Remove device D158       | 3   | 40         | 43 pass                           | ✅        | ✅   | n/r            | `b458bd4`, 325 tests. E6.71–E6.73 with sprint-2-devices, devices-suite and help                                                                                                                                                                                                                                                                                                                                    |
 
 ## 7. Decision log
 

@@ -310,12 +310,15 @@ test('E8.21 — a keyword starts the flow and sends the numbered menu', async ()
   say(from, 'Show me the MENU please')
   expect(await expectSends(from, 1)).toEqual([MENU_TEXT])
   expect(sendsTo(from)[0]?.message.kind).toBe('text')
-  expect(
-    query<{ nodeId: string }>(
-      'SELECT nodeId FROM FlowSession WHERE chatId = ?',
-      chatId(from),
-    ),
-  ).toEqual([{ nodeId: 'menu' }])
+  // Written after the send returns: poll rather than race the send log.
+  await expect
+    .poll(() =>
+      query<{ nodeId: string }>(
+        'SELECT nodeId FROM FlowSession WHERE chatId = ?',
+        chatId(from),
+      ),
+    )
+    .toEqual([{ nodeId: 'menu' }])
 
   // Whole words only: "menus" does not start it.
   const other = '+919100002102'
@@ -341,13 +344,16 @@ test('E8.22 — a choice by number or by title advances the flow and ends it', a
   expect((await expectSends(byTitle, 2))[1]).toBe('Prices start at 499.')
 
   // Both conversations reached the end of the flow: no session is left.
-  expect(
-    query(
-      'SELECT chatId FROM FlowSession WHERE chatId IN (?, ?)',
-      chatId(byNumber),
-      chatId(byTitle),
-    ),
-  ).toHaveLength(0)
+  await expect
+    .poll(
+      () =>
+        query(
+          'SELECT chatId FROM FlowSession WHERE chatId IN (?, ?)',
+          chatId(byNumber),
+          chatId(byTitle),
+        ).length,
+    )
+    .toBe(0)
 })
 
 test('E8.23 — a reply matching no choice sends the "didn\'t understand" text and stays', async () => {
@@ -457,9 +463,13 @@ test('E8.29 — an unanswered session expires and a late reply is no longer a me
   const from = '+919100002901'
   say(from, 'menu')
   await expectSends(from, 1)
-  expect(
-    query('SELECT chatId FROM FlowSession WHERE chatId = ?', chatId(from)),
-  ).toHaveLength(1)
+  // The session is written after the send returns, so the send log can be
+  // seen a moment before the row exists.
+  await expect
+    .poll(
+      () => query('SELECT chatId FROM FlowSession WHERE chatId = ?', chatId(from)).length,
+    )
+    .toBe(1)
   // flowTick (every RB_TICK_MS) removes it once RB_FLOW_SESSION_MS has passed.
   await expect
     .poll(

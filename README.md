@@ -146,7 +146,7 @@ clean database and an unactivated app.
 | `npm run build`      | Production bundles for main, preload, wa-service and the renderer                   |
 | `npm run pack`       | Unpacked build in `dist/`, no installer                                             |
 | `npm run dist`       | Installer for the current platform in `dist/` (NSIS on Windows, dmg + zip on macOS) |
-| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (301 tests)                  |
+| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (325 tests)                  |
 | `npm run test:smoke` | Packages the app and runs its self-test — catches asar/native issues                |
 | `npm run db:studio`  | Browse the local database                                                           |
 
