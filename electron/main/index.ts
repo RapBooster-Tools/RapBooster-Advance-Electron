@@ -66,6 +66,7 @@ import {
   notifyIncoming,
 } from './services/desktop'
 import { emitToAll } from './ipc/router'
+import { windowBackground } from './window-background'
 import { waBridge } from './wa-bridge'
 import { campaignEngine } from './services/campaign-engine'
 import { groupRunner } from './services/group-runner'
@@ -139,7 +140,7 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 680,
     show: false,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: windowBackground(),
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

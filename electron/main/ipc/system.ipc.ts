@@ -4,7 +4,7 @@
  * These are the first real handlers, so they also prove the contract end to end:
  * request validation, response validation, and the error envelope.
  */
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, nativeTheme, shell } from 'electron'
 import { copyFileSync, existsSync, rmSync } from 'node:fs'
 import { AppError } from '../../../shared/errors'
 import { createBackup } from '../db/backup'
@@ -14,9 +14,21 @@ import { backupsDir, databasePath, logsDir, userDataDir } from '../db/paths'
 import { buildDiagnostics } from '../services/diagnostics'
 import { checkForUpdate } from '../services/updater'
 import { waBridge } from '../wa-bridge'
+import { windowBackground } from '../window-background'
 import { registerHandler } from './router'
 
 export function registerSystemHandlers(): void {
+  registerHandler('system:setThemeSource', ({ source }) => {
+    // The title bar and native menus follow nativeTheme; the page follows the
+    // renderer's own data-theme. Without this a forced Dark sits under a light
+    // OS title bar.
+    nativeTheme.themeSource = source
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.setBackgroundColor(windowBackground())
+    }
+    return { ok: true as const }
+  })
+
   registerHandler('system:version', () => ({
     app: app.getVersion(),
     electron: process.versions.electron ?? 'unknown',

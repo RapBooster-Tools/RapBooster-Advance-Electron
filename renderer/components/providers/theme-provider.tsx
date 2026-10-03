@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useSyncExternalStore,
   type ReactNode,
@@ -54,6 +55,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     readThemePreference,
     () => 'system' as const,
   )
+  // The OS title bar follows nativeTheme in main, not this page's attribute.
+  useEffect(() => {
+    void window.api
+      .invoke('system:setThemeSource', { source: preference })
+      .then((result) => {
+        if (!result.ok) console.warn('could not match the window frame to the theme')
+      })
+  }, [preference])
+
   const resolved = useSyncExternalStore(
     subscribeUiPreferences,
     readResolvedTheme,

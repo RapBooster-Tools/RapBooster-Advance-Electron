@@ -617,6 +617,11 @@ export const ipcContract = {
 
   // ── System ──
   'system:dashboard': { request: z.void(), response: dashboardStats },
+  /** Make the OS window frame follow the in-app theme choice. */
+  'system:setThemeSource': {
+    request: z.object({ source: z.enum(['light', 'dark', 'system']) }),
+    response: ok,
+  },
   'system:version': {
     request: z.void(),
     response: z.object({

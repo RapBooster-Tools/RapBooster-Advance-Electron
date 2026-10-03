@@ -68,6 +68,10 @@ test('E7.2 — choosing Dark switches the whole app to the dark tokens', async (
   await expect(win.getByTestId('theme-dark')).toHaveAttribute('aria-checked', 'true')
   await expect(win.getByTestId('theme-system')).toHaveAttribute('aria-checked', 'false')
   expect(await bodyBackground()).toBe(DARK_APP_BG)
+  // The OS window frame follows too (nativeTheme in main).
+  await expect
+    .poll(() => app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
+    .toBe('dark')
 })
 
 test('E7.3 — the choice survives a reload and is applied before first paint', async () => {

@@ -85,6 +85,7 @@ export const IPC_CHANNELS = [
   'settings:setSendingDefaults',
 
   'system:dashboard',
+  'system:setThemeSource',
   'system:version',
   'system:paths',
   'system:openPath',

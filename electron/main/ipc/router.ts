@@ -44,6 +44,8 @@ const UNGATED: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
   'license:deactivate',
   'license:revalidate',
   'system:version',
+  // The activation screen is themed too.
+  'system:setThemeSource',
 ])
 
 let gate: (() => boolean) | undefined
