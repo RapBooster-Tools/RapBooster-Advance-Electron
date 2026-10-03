@@ -10,6 +10,7 @@ import type { EnrollmentStatus, SequenceStatus } from '../../../shared/types'
 import { getPrisma } from '../db/client'
 import { enrollAudience } from '../services/sequence-enroll'
 import { parseDeviceIds, reassignOrphans } from '../services/sequences'
+import { notify } from '../services/notify'
 import { registerHandler } from './router'
 
 const UNENROLL_BATCH = 1_000
@@ -192,9 +193,11 @@ export function registerSequenceHandlers(): void {
     return { ok: true as const }
   })
 
-  registerHandler('sequence:enroll', ({ id, listIds, tagIds, contactIds }) =>
-    enrollAudience(id, { listIds, tagIds, contactIds }),
-  )
+  registerHandler('sequence:enroll', async ({ id, listIds, tagIds, contactIds }) => {
+    const result = await enrollAudience(id, { listIds, tagIds, contactIds })
+    notify('sequence:changed', { sequenceId: id })
+    return result
+  })
 
   registerHandler('sequence:enrollments', async ({ id, status, cursor, limit }) => {
     const prisma = getPrisma()
@@ -252,6 +255,12 @@ export function registerSequenceHandlers(): void {
       )
     }
     await prisma.$transaction(batches)
+    const touched = await prisma.sequenceEnrollment.findMany({
+      where: { id: { in: enrollmentIds.slice(0, 1_000) } },
+      select: { sequenceId: true },
+      distinct: ['sequenceId'],
+    })
+    for (const { sequenceId } of touched) notify('sequence:changed', { sequenceId })
     return { ok: true as const }
   })
 }

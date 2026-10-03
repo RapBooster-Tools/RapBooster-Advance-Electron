@@ -18,7 +18,8 @@ import Database from 'better-sqlite3'
 import { getPrisma } from '../db/client'
 import { databasePath } from '../db/paths'
 import { inQuietHours } from '../../../shared/quiet-hours'
-import { buildTemplateMessage } from './template-message'
+import type { CampaignStatus } from '../../../shared/types'
+import { buildTemplateMessage, mergeValues } from './template-message'
 import { waBridge } from '../wa-bridge'
 import { notify, toast } from './notify'
 import { suppressedPhones } from './optout'
@@ -37,29 +38,6 @@ export interface CampaignCounters {
   sent: number
   failed: number
   pending: number
-}
-
-/**
- * Increment a device's daily counter, rolling it over first if it belongs to a
- * previous day. Without the rollover this column only ever grew, which turned
- * the daily cap into a permanent one — see `seedDailyCount`.
- */
-async function bumpDailyCount(deviceId: string): Promise<void> {
-  const prisma = getPrisma()
-  const device = await prisma.device.findUnique({ where: { id: deviceId } })
-  if (!device) return
-
-  if (isStaleDay(device.dailyCountResetAt)) {
-    await prisma.device.update({
-      where: { id: deviceId },
-      data: { dailySentCount: 1, dailyCountResetAt: new Date() },
-    })
-    return
-  }
-  await prisma.device.update({
-    where: { id: deviceId },
-    data: { dailySentCount: { increment: 1 } },
-  })
 }
 
 /** Retryable failures are transient; terminal ones will fail identically forever. */
@@ -130,7 +108,11 @@ export async function counters(campaignId: string): Promise<CampaignCounters> {
   return { total: sent + failed + skipped + pending, sent, failed, pending }
 }
 
-type ProgressListener = (campaignId: string, counters: CampaignCounters) => void
+type ProgressListener = (
+  campaignId: string,
+  counters: CampaignCounters,
+  status: CampaignStatus,
+) => void
 
 /**
  * Device health breaker (D89).
@@ -211,30 +193,6 @@ class DeviceSlots {
     this.waiters = []
     for (const wake of woken) wake()
   }
-}
-
-/** Contact fields as merge-tag values. */
-function mergeValues(contact: {
-  data: string
-  name: string
-  phone: string
-}): Record<string, string> {
-  try {
-    const parsed: unknown = JSON.parse(contact.data)
-    if (parsed && typeof parsed === 'object') {
-      return Object.fromEntries(
-        Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [
-          k,
-          String(v ?? ''),
-        ]),
-      )
-    }
-  } catch (err) {
-    // Corrupt JSON in one row must not stop a campaign; the promoted columns
-    // still carry the two fields every template uses.
-    console.debug('campaign: unreadable contact data, using name and phone', err)
-  }
-  return { Name: contact.name, Mobile: contact.phone }
 }
 
 const VERIFY_BATCH = 50
@@ -489,7 +447,7 @@ export class CampaignEngine {
       }),
       prisma.campaignRecipient.updateMany({
         where: { id: { in: invalid.map((r) => r.id) }, status: 'pending' },
-        data: { status: 'skipped', error: 'Not on WhatsApp', sentAt: now },
+        data: { status: 'skipped', error: 'Not on WhatsApp' },
       }),
     ])
   }
@@ -531,7 +489,7 @@ export class CampaignEngine {
       if ((await suppressedPhones([claimed.phone])).size > 0) {
         await prisma.campaignRecipient.update({
           where: { id: claimed.id },
-          data: { status: 'skipped', error: 'Opted out', sentAt: new Date() },
+          data: { status: 'skipped', error: 'Opted out' },
         })
         continue
       }
@@ -552,7 +510,6 @@ export class CampaignEngine {
           where: { id: claimed.id },
           data: { status: 'sent', messageId, sentAt: new Date(), error: null },
         })
-        await bumpDailyCount(deviceId)
         this.health.record(deviceId, true)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -603,11 +560,22 @@ export class CampaignEngine {
 
   private async emit(campaignId: string): Promise<void> {
     const c = await counters(campaignId)
-    await getPrisma().campaign.update({
+    const row = await getPrisma().campaign.update({
       where: { id: campaignId },
       data: { sentCount: c.sent, failedCount: c.failed, totalCount: c.total },
     })
-    this.progress?.(campaignId, c)
+    this.progress?.(campaignId, c, row.status as CampaignStatus)
+  }
+
+  /**
+   * Push current counters for a campaign that is not necessarily running —
+   * e.g. a delivery or read receipt arriving after it finished, so the card's
+   * engagement numbers update without the renderer polling.
+   */
+  async publish(campaignId: string): Promise<void> {
+    const row = await getPrisma().campaign.findUnique({ where: { id: campaignId } })
+    if (!row) return
+    this.progress?.(campaignId, await counters(campaignId), row.status as CampaignStatus)
   }
 
   private async finish(campaignId: string): Promise<void> {
@@ -630,7 +598,7 @@ export class CampaignEngine {
         ...(status === 'completed' ? { completedAt: new Date() } : {}),
       },
     })
-    this.progress?.(campaignId, c)
+    this.progress?.(campaignId, c, (status ?? 'running') as CampaignStatus)
 
     if (status === 'completed' && current?.status === 'running') {
       await emitWebhook('campaign.completed', {

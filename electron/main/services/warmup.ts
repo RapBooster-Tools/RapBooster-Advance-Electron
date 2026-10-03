@@ -15,7 +15,6 @@ import { getPrisma } from '../db/client'
 import { waBridge } from '../wa-bridge'
 import {
   isParkingError,
-  isStaleDay,
   minutesOf,
   quietWindow,
   readSendingDefaults,
@@ -147,22 +146,6 @@ async function writeState(state: DayState): Promise<void> {
   })
 }
 
-/** Same rollover as the campaign engine's counter, so the cap survives restarts. */
-async function bumpDailyCount(deviceId: string): Promise<void> {
-  const prisma = getPrisma()
-  const device = await prisma.device.findUnique({
-    where: { id: deviceId },
-    select: { dailyCountResetAt: true },
-  })
-  if (!device) return
-  await prisma.device.update({
-    where: { id: deviceId },
-    data: isStaleDay(device.dailyCountResetAt)
-      ? { dailySentCount: 1, dailyCountResetAt: new Date() }
-      : { dailySentCount: { increment: 1 } },
-  })
-}
-
 type Peer = { id: string; phone: string }
 
 /** Connected, unpaused warmup devices with a known number — distinct numbers only. */
@@ -216,7 +199,6 @@ async function converse(a: Peer, b: Peer, pause: boolean): Promise<void> {
         to: to.phone,
         message: { kind: 'text', body: lines[turn] ?? '' },
       })
-      await bumpDailyCount(from.id)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       // Hitting the cap or quiet hours mid-conversation simply ends it; it is

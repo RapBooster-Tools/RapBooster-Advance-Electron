@@ -12,6 +12,7 @@
  *      an automated send: it obeys the delay, the daily cap and quiet hours.
  */
 import { getPrisma } from '../db/client'
+import { notify } from './notify'
 import { sendOne, type DueRow } from './sequence-step'
 
 /** Enrollments claimed per tick. Bounded so one tick never builds a huge backlog. */
@@ -69,15 +70,24 @@ export async function reassignOrphans(
 export async function stopOnReply(phone: string): Promise<void> {
   // A LID or other non-phone sender cannot be matched to a contact reliably.
   if (!E164.test(phone)) return
+  const where = {
+    phone,
+    status: { in: ['active', 'sending'] },
+    sequence: { stopOnReply: true },
+  }
+  const affected = await getPrisma().sequenceEnrollment.findMany({
+    where,
+    select: { sequenceId: true },
+    distinct: ['sequenceId'],
+    take: 100,
+  })
+  if (affected.length === 0) return
   const { count } = await getPrisma().sequenceEnrollment.updateMany({
-    where: {
-      phone,
-      status: { in: ['active', 'sending'] },
-      sequence: { stopOnReply: true },
-    },
+    where,
     data: { status: 'stopped', stoppedReason: 'Replied', nextRunAt: null },
   })
   if (count > 0) console.log(`sequences: ${count} enrollment(s) stopped by a reply`)
+  for (const { sequenceId } of affected) notify('sequence:changed', { sequenceId })
 }
 
 async function runDue(): Promise<void> {

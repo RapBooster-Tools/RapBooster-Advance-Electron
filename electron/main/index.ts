@@ -41,7 +41,11 @@ import {
   handleLabelAssociation,
   refreshBusinessStatus,
 } from './services/labels'
-import { applyAllDevicePolicies, applyDevicePolicy } from './services/sending-policy'
+import {
+  applyAllDevicePolicies,
+  applyDevicePolicy,
+  bumpDailyCount,
+} from './services/sending-policy'
 import { registerJob, startScheduler, stopScheduler } from './services/scheduler'
 import { sequenceTick } from './services/sequences'
 import { webhookTick } from './services/webhooks'
@@ -183,10 +187,10 @@ function startWaService(): void {
     emitToAll(windows(), 'groupJob:progress', p)
   })
 
-  campaignEngine.onProgress((campaignId, c) => {
+  campaignEngine.onProgress((campaignId, c, status) => {
     emitToAll(windows(), 'campaign:progress', {
       campaignId,
-      status: 'running',
+      status,
       sent: c.sent,
       failed: c.failed,
       total: c.total,
@@ -296,9 +300,9 @@ function startWaService(): void {
   })
 
   waBridge.on('receipt', ({ messageId, status }) => {
-    void recordReceipt(messageId, status).catch((err: unknown) =>
-      console.error('could not record campaign receipt', err),
-    )
+    void recordReceipt(messageId, status)
+      .then((campaignId) => (campaignId ? campaignEngine.publish(campaignId) : undefined))
+      .catch((err: unknown) => console.error('could not record campaign receipt', err))
     void getPrisma()
       .message.update({ where: { id: messageId }, data: { status } })
       .then(() => emitToAll(windows(), 'message:status', { messageId, status }))
@@ -330,6 +334,14 @@ function startWaService(): void {
     if (level === 'error') console.error(`[wa-service] ${message}`)
     else if (level === 'warn') console.warn(`[wa-service] ${message}`)
     else console.log(`[wa-service] ${message}`)
+  })
+
+  // Every accepted send counts against the device's daily allowance, whichever
+  // feature sent it — see WaBridge.onSent.
+  waBridge.onSent((deviceId) => {
+    void bumpDailyCount(deviceId).catch((err: unknown) =>
+      console.error(`could not count a send for ${deviceId}`, err),
+    )
   })
 
   waBridge.start()

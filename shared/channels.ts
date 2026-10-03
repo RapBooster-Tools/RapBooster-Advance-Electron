@@ -88,6 +88,7 @@ export const IPC_CHANNELS = [
   'system:version',
   'system:paths',
   'system:openPath',
+  'system:pickFile',
   'system:exportDiagnostics',
   'system:backup',
   'system:restore',
@@ -186,6 +187,7 @@ export const IPC_EVENTS = [
   'post:changed',
   'chat:updated',
   'device:updated',
+  'sequence:changed',
 ] as const
 
 export type IpcChannelName = (typeof IPC_CHANNELS)[number]

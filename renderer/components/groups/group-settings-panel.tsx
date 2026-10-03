@@ -45,7 +45,11 @@ export function GroupSettingsPanel({
   const [pending, setPending] = useState<Toggle | 'description'>()
   const [description, setDescription] = useState('')
 
+  // Optimistic: the switch moves the moment it is clicked and rolls back if
+  // WhatsApp refuses. Waiting for the round trip made it feel broken — a click
+  // that visibly did nothing for a second or two.
   async function toggle(key: Toggle, next: boolean) {
+    setValues((v) => ({ ...v, [key]: next }))
     setPending(key)
     const result = await window.api.invoke('group:updateSettings', {
       groupId: group.id,
@@ -53,10 +57,10 @@ export function GroupSettingsPanel({
     })
     setPending(undefined)
     if (!result.ok) {
+      setValues((v) => ({ ...v, [key]: !next }))
       toast('error', result.error.userMessage)
       return
     }
-    setValues((v) => ({ ...v, [key]: next }))
     onChanged()
   }
 

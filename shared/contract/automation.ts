@@ -274,4 +274,6 @@ export const automationChannels = {
 export const automationEvents = {
   /** Warmup, health or business status changed — the Devices screen refetches. */
   'device:updated': z.object({ deviceId: id }),
+  /** Enrollments moved (a step sent, a reply stopped one, enroll/unenroll). */
+  'sequence:changed': z.object({ sequenceId: id }),
 } as const

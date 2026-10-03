@@ -7,55 +7,15 @@
 import { getPrisma } from '../db/client'
 import { waBridge } from '../wa-bridge'
 import { isSuppressed } from './optout'
-import { isParkingError, isStaleDay } from './sending-policy'
-import { buildTemplateMessage, type TemplateRow } from './template-message'
+import { isParkingError } from './sending-policy'
+import { buildTemplateMessage, mergeValues, type TemplateRow } from './template-message'
+import { notify } from './notify'
 import { emitWebhook } from './webhooks'
 
 /** Errors that mean the message never left this machine: retry, do not fail. */
 function notSent(message: string): boolean {
   const lower = message.toLowerCase()
   return lower.includes('not connected') || lower.includes('wa-service is not running')
-}
-
-/** Contact fields as merge-tag values, so `{{Name}}` and custom columns resolve. */
-function mergeValues(contact: {
-  data: string
-  name: string
-  phone: string
-}): Record<string, string> {
-  const values: Record<string, string> = { Name: contact.name, Mobile: contact.phone }
-  try {
-    const parsed: unknown = JSON.parse(contact.data)
-    if (parsed && typeof parsed === 'object') {
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        values[key] = String(value ?? '')
-      }
-    }
-  } catch (err) {
-    // The promoted columns still carry the two fields every template uses.
-    console.debug('sequences: unreadable contact data, using name and phone', err)
-  }
-  return values
-}
-
-/**
- * Persist the device's daily counter so a restart seeds the throttle with the
- * real number of sends today; otherwise sequence sends would not count toward
- * the cap after a relaunch.
- */
-async function bumpDailyCount(deviceId: string): Promise<void> {
-  const prisma = getPrisma()
-  const device = await prisma.device.findUnique({
-    where: { id: deviceId },
-    select: { dailyCountResetAt: true },
-  })
-  if (!device) return
-  await prisma.device.update({
-    where: { id: deviceId },
-    data: isStaleDay(device.dailyCountResetAt)
-      ? { dailySentCount: 1, dailyCountResetAt: new Date() }
-      : { dailySentCount: { increment: 1 } },
-  })
 }
 
 export interface LoadedSequence {
@@ -84,7 +44,16 @@ async function release(row: DueRow): Promise<void> {
   })
 }
 
+/** Process one enrollment, then tell the Sequences screen something moved. */
 export async function sendOne(row: DueRow, sequence: LoadedSequence): Promise<Outcome> {
+  try {
+    return await processOne(row, sequence)
+  } finally {
+    notify('sequence:changed', { sequenceId: row.sequenceId })
+  }
+}
+
+async function processOne(row: DueRow, sequence: LoadedSequence): Promise<Outcome> {
   const prisma = getPrisma()
 
   // NOTE: nextRunAt doubles as the claim time while a row is `sending` — it is
@@ -155,8 +124,6 @@ export async function sendOne(row: DueRow, sequence: LoadedSequence): Promise<Ou
     })
     return 'done'
   }
-
-  await bumpDailyCount(row.deviceId)
 
   const sentAt = new Date()
   const following = sequence.steps[row.nextStep + 1]

@@ -4,7 +4,7 @@
  * These are the first real handlers, so they also prove the contract end to end:
  * request validation, response validation, and the error envelope.
  */
-import { app, shell } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import { copyFileSync, existsSync, rmSync } from 'node:fs'
 import { AppError } from '../../../shared/errors'
 import { createBackup } from '../db/backup'
@@ -30,6 +30,26 @@ export function registerSystemHandlers(): void {
     database: databasePath(),
     logs: logsDir(),
   }))
+
+  registerHandler('system:pickFile', async ({ title, filters, multiple }) => {
+    // NOTE: E2E cannot click a native dialog. Under test, RB_PICK_FILE supplies
+    // the chosen paths ("|"-separated) so specs drive the real UI flow.
+    if (process.env.NODE_ENV === 'test' && process.env.RB_PICK_FILE !== undefined) {
+      return { paths: process.env.RB_PICK_FILE.split('|').filter(Boolean) }
+    }
+    const owner = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    const options = {
+      ...(title ? { title } : {}),
+      filters,
+      properties: multiple
+        ? (['openFile', 'multiSelections'] as Array<'openFile' | 'multiSelections'>)
+        : (['openFile'] as Array<'openFile' | 'multiSelections'>),
+    }
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options)
+    return { paths: result.canceled ? [] : result.filePaths }
+  })
 
   registerHandler('system:openPath', async ({ path }) => {
     // Only paths inside our own data directory may be opened. Without this the

@@ -175,10 +175,35 @@ export class WaBridge {
     this.handlers.set(event, list)
   }
 
+  private sentListener: ((deviceId: string) => void) | undefined
+
+  /**
+   * Called once per message WhatsApp accepted — sends, status posts and channel
+   * posts alike. WHY here: the throttle's in-memory daily count includes every
+   * send, so the persisted count it is re-seeded from after a restart must too.
+   * Counting per feature left AI replies, keyword rules and group jobs out, and
+   * a restart quietly handed those devices extra allowance.
+   */
+  onSent(listener: (deviceId: string) => void): void {
+    this.sentListener = listener
+  }
+
   async request<K extends WaRequestKind>(
     kind: K,
     payload: WaRequests[K],
     timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<WaResponses[K]> {
+    const result = await this.send(kind, payload, timeoutMs)
+    if (kind === 'message:send' || kind === 'status:post' || kind === 'channel:post') {
+      this.sentListener?.((payload as { deviceId: string }).deviceId)
+    }
+    return result
+  }
+
+  private async send<K extends WaRequestKind>(
+    kind: K,
+    payload: WaRequests[K],
+    timeoutMs: number,
   ): Promise<WaResponses[K]> {
     const child = this.child
     if (!child) throw new Error('wa-service is not running')

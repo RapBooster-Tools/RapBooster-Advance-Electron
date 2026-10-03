@@ -12,7 +12,7 @@ import { z } from 'zod'
 import type { IpcResponse } from '../../../../shared/ipc'
 import type { AiProvider } from '../../../../shared/types'
 import { getPrisma } from '../../db/client'
-import { decryptValue } from '../secure-store'
+import { decryptValue, isPlaintextMarked } from '../secure-store'
 import type { ChatbotSettings } from './prompt'
 
 export type AiConfig = IpcResponse<'ai:setConfig'>
@@ -62,9 +62,6 @@ const CONFIG_KEYS = [
 ].map((k) => `ai.${k}`)
 
 const providerSchema = z.enum(['openai', 'anthropic', 'gemini', 'compatible'])
-
-/** Mirrors secure-store's marker for a value it could not encrypt. */
-const PLAINTEXT_PREFIX = 'plain:'
 
 let cachedConfig: AiConfig | undefined
 
@@ -146,9 +143,7 @@ export async function readKey(provider: AiProvider): Promise<string | null> {
   // prefix to the provider as part of the key, so every call was rejected.
   // decryptValue strips the prefix without touching safeStorage.
   const value =
-    row.isEncrypted || row.value.startsWith(PLAINTEXT_PREFIX)
-      ? decryptValue(row.value)
-      : row.value
+    row.isEncrypted || isPlaintextMarked(row.value) ? decryptValue(row.value) : row.value
   return value && value.trim() !== '' ? value.trim() : null
 }
 

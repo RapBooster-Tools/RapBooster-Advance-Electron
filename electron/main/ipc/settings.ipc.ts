@@ -8,6 +8,8 @@
  */
 import { AppError } from '../../../shared/errors'
 import { getPrisma } from '../db/client'
+import { invalidateAiConfig } from '../services/ai/ai-config'
+import { campaignEngine } from '../services/campaign-engine'
 import { encryptValue } from '../services/secure-store'
 import {
   applyAllDevicePolicies,
@@ -54,6 +56,10 @@ export function registerSettingsHandlers(): void {
       update: { value: result.data, isEncrypted: result.encrypted },
     })
 
+    // AI settings are cached in memory; a write through this generic channel
+    // must take effect now, not after a restart.
+    if (key.startsWith('ai.')) invalidateAiConfig()
+
     // The renderer needs this to warn the user. CLAUDE.md §5.6 requires an
     // explicit degrade rather than silent plaintext, and a secret stored in the
     // clear is something the user must be able to act on.
@@ -82,6 +88,11 @@ export function registerSettingsHandlers(): void {
     await writeSendingDefaults(input)
     // Every device's throttle picks up the change now, not at the next campaign.
     await applyAllDevicePolicies()
+    // ...then running campaigns re-assert their own delays. WHY: the base policy
+    // carries the global delays, so without this a campaign set to 30-60 s
+    // between messages sped up to the 0-5 s defaults the moment the user
+    // touched any sending setting mid-run (E5.34) — an anti-ban regression.
+    await campaignEngine.reconfigureRunning()
     return input
   })
 }

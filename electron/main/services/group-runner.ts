@@ -127,9 +127,6 @@ export class GroupRunner {
       })
       if (!job) return
 
-      // Groups send the same payload a campaign would — media, buttons and
-      // lists included. Building text only here is what used to drop them.
-      const payload = buildTemplateMessage(job.template, {})
       let done = 0
 
       for (const target of job.targets) {
@@ -141,7 +138,10 @@ export class GroupRunner {
           await waBridge.request('message:send', {
             deviceId: target.group.deviceId,
             to: target.group.id,
-            message: payload,
+            // Built per group, not once per job: the same payload a campaign
+            // sends (media, buttons, lists) and a fresh spintax variant each
+            // time, so no two groups receive an identical message.
+            message: buildTemplateMessage(job.template, {}),
           })
           await prisma.groupSendTarget.update({
             where: { id: target.id },

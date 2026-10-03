@@ -15,6 +15,7 @@
  * because one broken integration must not silence the inbox.
  */
 import type { MessageType } from '../../../shared/types'
+import { getPrisma } from '../db/client'
 import { maybeReply } from './ai/responder'
 import { attributeReply } from './attribution'
 import { tryKeywordReply } from './keyword-rules'
@@ -44,7 +45,29 @@ async function step<T>(name: string, fn: () => Promise<T>): Promise<T | undefine
   }
 }
 
+/**
+ * True when the sender is one of our own linked numbers. WHY: warmup sends
+ * real messages between the user's devices, and the receiving device sees them
+ * as ordinary inbound traffic. Without this, the bot and keyword rules would
+ * answer our own warmup chatter — two devices replying to each other forever —
+ * and the messages would be attributed as campaign replies.
+ */
+async function isOwnDevice(phone: string): Promise<boolean> {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 7) return false
+  const devices = await getPrisma().device.findMany({
+    where: { phone: { not: null } },
+    select: { phone: true },
+    take: 100,
+  })
+  return devices.some((d) => (d.phone ?? '').replace(/\D/g, '') === digits)
+}
+
 export async function handleInbound(ctx: InboundContext): Promise<void> {
+  // Stored and shown already; nothing automated reacts to our own numbers.
+  if (!ctx.isGroup && (await step('own-device check', () => isOwnDevice(ctx.phone))))
+    return
+
   if (!ctx.isGroup) {
     const optedOut = await step('opt-out', () => handleOptOut(ctx))
     if (optedOut) return

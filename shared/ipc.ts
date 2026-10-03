@@ -631,6 +631,23 @@ export const ipcContract = {
     response: z.object({ userData: z.string(), database: z.string(), logs: z.string() }),
   },
   'system:openPath': { request: z.object({ path: z.string().min(1) }), response: ok },
+  /**
+   * The native "choose a file" dialog. Non-technical users must never type a
+   * file path (D96); every file input in the app goes through this.
+   */
+  'system:pickFile': {
+    request: z.object({
+      title: z.string().max(100).optional(),
+      filters: z
+        .array(
+          z.object({ name: z.string().max(60), extensions: z.array(z.string().max(10)) }),
+        )
+        .max(10)
+        .default([]),
+      multiple: z.boolean().default(false),
+    }),
+    response: z.object({ paths: z.array(z.string()) }),
+  },
   'system:exportDiagnostics': {
     request: z.void(),
     response: z.object({ filePath: z.string() }),

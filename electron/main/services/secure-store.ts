@@ -14,6 +14,11 @@ import { safeStorage } from 'electron'
 
 const PLAINTEXT_PREFIX = 'plain:'
 
+/** True for a value secure-store had to keep unencrypted (no OS keychain). */
+export function isPlaintextMarked(data: string): boolean {
+  return data.startsWith(PLAINTEXT_PREFIX)
+}
+
 export function isEncryptionAvailable(): boolean {
   try {
     return safeStorage.isEncryptionAvailable()

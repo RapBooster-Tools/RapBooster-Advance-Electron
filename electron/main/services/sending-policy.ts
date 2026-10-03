@@ -222,3 +222,23 @@ export async function applyAllDevicePolicies(): Promise<void> {
 export function isParkingError(message: string): boolean {
   return message.includes('daily cap') || message.includes('quiet hours')
 }
+
+/**
+ * Count one accepted send against the device's daily allowance, rolling the
+ * counter over first if it belongs to an earlier day. Wired once, to the
+ * wa-bridge `onSent` hook, so every sender is counted exactly once.
+ */
+export async function bumpDailyCount(deviceId: string): Promise<void> {
+  const prisma = getPrisma()
+  const device = await prisma.device.findUnique({
+    where: { id: deviceId },
+    select: { dailyCountResetAt: true },
+  })
+  if (!device) return
+  await prisma.device.update({
+    where: { id: deviceId },
+    data: isStaleDay(device.dailyCountResetAt)
+      ? { dailySentCount: 1, dailyCountResetAt: new Date() }
+      : { dailySentCount: { increment: 1 } },
+  })
+}

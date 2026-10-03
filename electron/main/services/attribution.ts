@@ -10,22 +10,32 @@ import { readSendingDefaults } from './sending-policy'
 
 /**
  * Record a WhatsApp receipt against the campaign recipient that sent it.
- * Returns true when the message belonged to a campaign.
+ * Returns the campaign id when the message belonged to a campaign.
+ *
+ * WHY a read also stamps delivery: WhatsApp can send "read" without a
+ * "delivered" receipt before it, and a message that was read was certainly
+ * delivered. Without this the dashboard counted more reads than deliveries.
  */
 export async function recordReceipt(
   messageId: string,
   status: 'delivered' | 'read',
-): Promise<boolean> {
+): Promise<string | null> {
   const prisma = getPrisma()
-  const now = new Date()
-  const result = await prisma.campaignRecipient.updateMany({
-    where: {
-      messageId,
-      ...(status === 'delivered' ? { deliveredAt: null } : { readAt: null }),
-    },
-    data: status === 'delivered' ? { deliveredAt: now } : { readAt: now },
+  const recipient = await prisma.campaignRecipient.findFirst({
+    where: { messageId },
+    select: { id: true, campaignId: true, deliveredAt: true, readAt: true },
   })
-  return result.count > 0
+  if (!recipient) return null
+
+  const now = new Date()
+  const data = {
+    ...(recipient.deliveredAt ? {} : { deliveredAt: now }),
+    ...(status === 'read' && !recipient.readAt ? { readAt: now } : {}),
+  }
+  if (Object.keys(data).length > 0) {
+    await prisma.campaignRecipient.update({ where: { id: recipient.id }, data })
+  }
+  return recipient.campaignId
 }
 
 /**

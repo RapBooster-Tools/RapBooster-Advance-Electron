@@ -163,6 +163,11 @@ test.beforeAll(async () => {
   // Creates the bot config, which is enabled by default with no key: any
   // message that reaches the AI step produces an AI_KEY_MISSING toast.
   await call('chatbot:get')
+  // No coalescing: the AI waits for a burst to settle before answering, so its
+  // toast for one test's message would otherwise land seconds later, inside
+  // the next test. These specs are about rules; the AI must answer at once.
+  const ai = await call<{ config: Record<string, unknown> }>('ai:getConfig')
+  await call('ai:setConfig', { ...ai.config, coalesceSeconds: 0 })
 
   const device = await call<{ id: string }>('device:create', { name: 'Automation' })
   deviceId = device.id

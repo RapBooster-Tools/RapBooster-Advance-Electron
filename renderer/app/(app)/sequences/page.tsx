@@ -11,7 +11,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { EmptyState } from '@renderer/components/ui/empty-state'
 import { StatusPill } from '@renderer/components/ui/status-pill'
-import { useIpcQuery } from '@renderer/hooks/useIpc'
+import { useIpcEvent, useIpcQuery } from '@renderer/hooks/useIpc'
 import type { IpcResponse } from '@shared/ipc'
 import type { SequenceStatus } from '@shared/types'
 
@@ -33,6 +33,8 @@ function formatDelay(minutes: number): string {
 export default function SequencesPage() {
   const sequences = useIpcQuery('sequence:list')
   const devices = useIpcQuery('device:list')
+  // Live: a step sent, a reply stopped someone, or an enrollment changed.
+  useIpcEvent('sequence:changed', () => sequences.refetch())
   const toast = useToast()
   const [editing, setEditing] = useState<Sequence | 'new'>()
   const [enrolling, setEnrolling] = useState<Sequence>()

@@ -213,3 +213,27 @@ export function buildTemplateMessage(
 
   return { kind: 'text', body: footer ? `${text}\n\n${footer}` : text }
 }
+
+/** Contact fields as merge-tag values. */
+export function mergeValues(contact: {
+  data: string
+  name: string
+  phone: string
+}): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(contact.data)
+    if (parsed && typeof parsed === 'object') {
+      return Object.fromEntries(
+        Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [
+          k,
+          String(v ?? ''),
+        ]),
+      )
+    }
+  } catch (err) {
+    // Corrupt JSON in one row must not stop a campaign; the promoted columns
+    // still carry the two fields every template uses.
+    console.debug('campaign: unreadable contact data, using name and phone', err)
+  }
+  return { Name: contact.name, Mobile: contact.phone }
+}

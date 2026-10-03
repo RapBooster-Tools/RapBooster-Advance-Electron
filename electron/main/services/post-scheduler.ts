@@ -17,7 +17,7 @@ import { getPrisma } from '../db/client'
 import { waBridge } from '../wa-bridge'
 import { notify } from './notify'
 import { suppressedPhones } from './optout'
-import { isParkingError, isStaleDay } from './sending-policy'
+import { isParkingError } from './sending-policy'
 
 /** Bounds the device scan; the app links at most 20 (CLAUDE.md §1.1). */
 const MAX_DEVICES = 50
@@ -135,22 +135,6 @@ function parseListIds(raw: string): string[] {
   }
 }
 
-/**
- * NOTE: mirrors campaign-engine's counter so a restart seeds the throttle with
- * today's true total — posts count against the daily cap like any send.
- */
-async function countSend(deviceId: string): Promise<void> {
-  const prisma = getPrisma()
-  const device = await prisma.device.findUnique({ where: { id: deviceId } })
-  if (!device) return
-  await prisma.device.update({
-    where: { id: deviceId },
-    data: isStaleDay(device.dailyCountResetAt)
-      ? { dailySentCount: 1, dailyCountResetAt: new Date() }
-      : { dailySentCount: { increment: 1 } },
-  })
-}
-
 function isNotConnected(message: string): boolean {
   return message.includes('not connected') || message.includes('wa-service')
 }
@@ -197,7 +181,6 @@ async function deliverClaimed(id: string): Promise<void> {
       }
 
       await setStatus(id, 'posted', { messageId, postedAt: new Date() })
-      await countSend(post.deviceId)
       console.info(`post ${id} posted to ${post.target}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
