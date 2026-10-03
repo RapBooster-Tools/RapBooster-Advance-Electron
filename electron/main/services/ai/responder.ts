@@ -1,189 +1,150 @@
 /**
- * OpenAI auto-responder (SPRINTS.md §12.1 T4.2).
+ * The AI auto-responder (SPRINTS.md §12.1 T4.2, extended by D89).
  *
  * Hard rules, enforced here rather than trusted to configuration:
  *   - never reply in a group
- *   - never reply to a chat the user opted out of
+ *   - never reply to a chat the user opted out of, or a number on the opt-out list
  *   - never reply to our own outbound message
  *   - never reply to a chat escalated to a human, until the user hands it back
+ *   - never exceed the daily AI caps
  *   - never reply when the key is missing — and say why, loudly
  *
  * Every failure mode is distinct and surfaced. A silent no-op would leave the
  * user believing auto-reply is working when it is not, which is worse than an
  * error they can act on.
  */
-import OpenAI from 'openai'
 import { AppError } from '../../../../shared/errors'
+import type { AiProvider } from '../../../../shared/types'
 import { getPrisma } from '../../db/client'
-import { decryptValue } from '../secure-store'
-import { waBridge } from '../../wa-bridge'
+import { chatE164 } from '../../ipc/chat.ipc'
+import { isSuppressed } from '../optout'
+import { isParkingError } from '../sending-policy'
 import {
-  buildMessages,
-  shouldEscalate,
-  type ChatbotSettings,
-  type HistoryMessage,
-} from './prompt'
+  DEFAULT_MODEL,
+  PROVIDER_LABEL,
+  getAiConfig,
+  loadBotSettings,
+  readKey,
+  type AiConfig,
+} from './ai-config'
+import { sendBotText } from './bot-send'
+import { release, takeTicket, waitForQuiet } from './coalesce'
+import { createDraft } from './drafts'
+import { escalate, escalationTrigger } from './escalation'
+import { buildSystemPrompt, type HistoryMessage } from './prompt'
+import { complete, probeKey } from './providers'
+import { capReached, recordUsage, toastCapOnce } from './usage'
 
-/** Until REQUIREMENTS §5 names one — assumption A5. */
-export const DEFAULT_MODEL = 'gpt-4o-mini'
-const DEFAULT_MAX_TOKENS = 500
-const DEFAULT_TEMPERATURE = 0.7
-const DEFAULT_HISTORY_DEPTH = 10
-const REQUEST_TIMEOUT_MS = 30_000
-
-async function setting(key: string): Promise<string | null> {
-  const row = await getPrisma().setting.findUnique({ where: { key } })
-  if (!row) return null
-  return row.isEncrypted ? decryptValue(row.value) : row.value
-}
-
-async function numberSetting(key: string, fallback: number): Promise<number> {
-  const raw = await setting(key)
-  const parsed = raw === null ? NaN : Number(raw)
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
-export async function apiKey(): Promise<string | null> {
-  const stored = await setting('ai.apiKey')
-  return stored && stored.trim() !== '' ? stored.trim() : null
-}
-
-function client(key: string): OpenAI {
-  // WHY the override exists: this is the only code path in the app that both
-  // calls a third-party API and then autonomously sends its output to the
-  // user's customers, and without a redirectable endpoint none of it could be
-  // tested — a wrong reply here goes to a real person. Mirrors LICENSE_API_URL,
-  // which the licence client already uses for the same reason.
-  //
-  // It also has a real production use: an OpenAI-compatible gateway or proxy
-  // (Azure OpenAI, LiteLLM, a corporate egress proxy) can be pointed at here.
-  const baseURL = process.env.OPENAI_BASE_URL?.trim()
-  return new OpenAI({
-    apiKey: key,
-    timeout: REQUEST_TIMEOUT_MS,
-    maxRetries: 1,
-    ...(baseURL ? { baseURL } : {}),
-  })
-}
-
-/** Map SDK failures onto the app's taxonomy so the UI can be specific. */
-function mapError(err: unknown): AppError {
-  const status = (err as { status?: number } | undefined)?.status
-  const message = err instanceof Error ? err.message : String(err)
-
-  if (status === 401 || status === 403) {
-    return new AppError('AI_KEY_INVALID', { detail: message })
-  }
-  if (status === 429) {
-    return new AppError('AI_RATE_LIMITED', { detail: message })
-  }
-  if (/timeout|aborted/i.test(message)) {
-    return new AppError('AI_TIMEOUT', { detail: message })
-  }
-  return new AppError('UNKNOWN', {
-    userMessage: 'The AI request failed.',
-    detail: message,
-  })
-}
+export { DEFAULT_MODEL }
 
 export async function testKey(
   candidate?: string,
+  provider?: AiProvider,
 ): Promise<{ valid: boolean; detail: string | null }> {
-  const key = candidate?.trim() || (await apiKey())
-  if (!key) return { valid: false, detail: 'No API key is configured.' }
+  const config = await getAiConfig()
+  const which = provider ?? config.provider
+  const key = candidate?.trim() || (await readKey(which))
+  // A local OpenAI-compatible server may legitimately run without a key.
+  if (!key && which !== 'compatible') {
+    return {
+      valid: false,
+      detail: `No API key is configured for ${PROVIDER_LABEL[which]}.`,
+    }
+  }
+  if (which === 'compatible' && !config.baseUrl) {
+    return { valid: false, detail: 'Save a base URL for the compatible endpoint first.' }
+  }
 
   try {
-    // One cheap call: listing models costs nothing and proves the key works.
-    await client(key).models.list()
+    await probeKey(which, key, config.baseUrl)
     return { valid: true, detail: null }
   } catch (err) {
-    const mapped = mapError(err)
-    return { valid: false, detail: mapped.userMessage }
+    return {
+      valid: false,
+      detail: err instanceof AppError ? err.userMessage : 'The key could not be checked.',
+    }
   }
-}
-
-async function loadSettings(): Promise<
-  | (ChatbotSettings & {
-      enabled: boolean
-      responseDelay: number
-      escalationMessage: string | null
-    })
-  | null
-> {
-  const config = await getPrisma().chatbotConfig.findUnique({
-    where: { id: 'singleton' },
-  })
-  if (!config) return null
-
-  let keywords: string[] = []
-  try {
-    const parsed: unknown = JSON.parse(config.escalationKeywords)
-    if (Array.isArray(parsed))
-      keywords = parsed.filter((k): k is string => typeof k === 'string')
-  } catch {
-    keywords = []
-  }
-
-  return {
-    enabled: config.enabled,
-    responseDelay: config.responseDelay,
-    systemInstructions: config.systemInstructions,
-    businessName: config.businessName,
-    businessEmail: config.businessEmail,
-    businessPhone: config.businessPhone,
-    tone: config.tone,
-    industry: config.industry,
-    primaryGoal: config.primaryGoal,
-    responseStyle: config.responseStyle,
-    language: config.language,
-    escalationTrigger: config.escalationTrigger,
-    escalationKeywords: keywords,
-    products: config.products,
-    knowledgeBase: config.knowledgeBase,
-    escalationMessage: config.escalationMessage,
-  }
-}
-
-/**
- * Send a bot-authored text and record it as an AI message.
- *
- * Through wa-service, so the throttle applies — an automated message is still
- * traffic from the user's account.
- */
-async function sendBotText(
-  deviceId: string,
-  chatId: string,
-  text: string,
-): Promise<void> {
-  const { messageId } = await waBridge.request('message:send', {
-    deviceId,
-    to: chatId,
-    message: { kind: 'text', body: text },
-  })
-
-  await getPrisma().message.create({
-    data: {
-      id: messageId,
-      chatId,
-      direction: 'out',
-      type: 'text',
-      body: text,
-      status: 'sent',
-      isAiReply: true,
-      timestamp: new Date(),
-    },
-  })
-  await getPrisma().chat.update({
-    where: { id: chatId },
-    data: { lastMessage: text, lastMessageAt: new Date() },
-  })
 }
 
 export type ReplyOutcome =
   | { kind: 'replied'; text: string }
+  | { kind: 'drafted'; status: 'pending_approval' | 'held' }
   | { kind: 'escalated' }
   | { kind: 'skipped'; reason: string }
   | { kind: 'failed'; code: string; message: string }
+
+/** Why the bot must stay out of this chat right now, or null. */
+async function blockedReason(chatId: string): Promise<string | null> {
+  const chat = await getPrisma().chat.findUnique({ where: { id: chatId } })
+  if (!chat) return 'chat not found'
+  if (chat.autoReplyOptOut) return 'chat opted out'
+  // WHY escalation is sticky: it means "a human owns this conversation now".
+  // `chat:resumeBot` clears it.
+  if (chat.isEscalated) return 'chat is escalated to a human'
+  if (!chat.isGroup && (await isSuppressed(chatE164(chat.phone)))) {
+    return 'number is on the opt-out list'
+  }
+  return null
+}
+
+/**
+ * The conversation for the model: recent history in order, the customer's
+ * burst at the end, and the burst's bodies on their own for the keyword check.
+ */
+async function conversation(chatId: string, depth: number) {
+  // +1 so a depth of N still includes N messages besides the newest.
+  const recent = await getPrisma().message.findMany({
+    where: { chatId },
+    orderBy: { timestamp: 'desc' },
+    select: { direction: true, body: true },
+    take: Math.max(1, depth + 1),
+  })
+  const burst: string[] = []
+  for (const m of recent) {
+    if (m.direction === 'out') break
+    if (m.body && m.body.trim() !== '') burst.push(m.body)
+  }
+  const turns: HistoryMessage[] = recent
+    .reverse()
+    .filter((m) => m.body && m.body.trim() !== '')
+    .map((m) => ({
+      role: m.direction === 'out' ? ('assistant' as const) : ('user' as const),
+      content: m.body!,
+    }))
+  return { turns, burst: burst.reverse() }
+}
+
+async function deliver(
+  deviceId: string,
+  chatId: string,
+  text: string,
+  config: AiConfig,
+): Promise<ReplyOutcome> {
+  if (config.approveBeforeSend) {
+    await createDraft({
+      chatId,
+      deviceId,
+      text,
+      status: 'pending_approval',
+      reason: null,
+    })
+    return { kind: 'drafted', status: 'pending_approval' }
+  }
+  try {
+    await sendBotText(deviceId, chatId, text)
+    return { kind: 'replied', text }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isParkingError(message)) {
+      // Quiet hours or the daily cap: not a failure. The reply waits and
+      // `heldDraftTick` sends it once the window ends.
+      const reason = message.includes('quiet hours') ? 'quiet hours' : 'daily cap reached'
+      await createDraft({ chatId, deviceId, text, status: 'held', reason })
+      return { kind: 'drafted', status: 'held' }
+    }
+    return { kind: 'failed', code: 'SEND_FAILED', message }
+  }
+}
 
 /**
  * Consider replying to one inbound message.
@@ -200,112 +161,101 @@ export async function maybeReply(
     return { kind: 'skipped', reason: 'message has no text' }
   }
   // A bot replying into a group is disruptive and gets accounts reported.
-  if (incoming.isGroup) {
-    return { kind: 'skipped', reason: 'group chat' }
-  }
+  if (incoming.isGroup) return { kind: 'skipped', reason: 'group chat' }
 
-  const settings = await loadSettings()
+  const settings = await loadBotSettings()
   if (!settings || !settings.enabled) {
     return { kind: 'skipped', reason: 'auto-reply is disabled' }
   }
 
-  const chat = await getPrisma().chat.findUnique({ where: { id: chatId } })
-  if (chat?.autoReplyOptOut) {
-    return { kind: 'skipped', reason: 'chat opted out' }
-  }
-  // WHY escalation is sticky: it means "a human owns this conversation now".
-  // Before this check the very next message got an AI reply again, talking
-  // over the person the customer was just promised. `chat:resumeBot` clears it.
-  if (chat?.isEscalated) {
-    return { kind: 'skipped', reason: 'chat is escalated to a human' }
-  }
+  const blocked = await blockedReason(chatId)
+  if (blocked) return { kind: 'skipped', reason: blocked }
 
-  if (shouldEscalate(incoming.body, settings)) {
-    await getPrisma().chat.update({ where: { id: chatId }, data: { isEscalated: true } })
+  const config = await getAiConfig()
+  const ticket = takeTicket(chatId)
+  try {
+    if (!(await waitForQuiet(ticket, config.coalesceSeconds))) {
+      return { kind: 'skipped', reason: 'coalesced' }
+    }
+    // The chat may have been escalated, opted out or answered during the wait.
+    const stillBlocked = await blockedReason(chatId)
+    if (stillBlocked) return { kind: 'skipped', reason: stillBlocked }
 
-    const notice = settings.escalationMessage?.trim()
-    if (notice) {
-      try {
-        await sendBotText(deviceId, chatId, notice)
-      } catch (err) {
-        return {
-          kind: 'failed',
-          code: 'SEND_FAILED',
-          message: `Escalated for a human reply, but the escalation message could not be sent: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        }
+    const { turns, burst } = await conversation(chatId, config.historyDepth)
+    // A person replied by hand while the bot was waiting.
+    if (burst.length === 0) return { kind: 'skipped', reason: 'already answered' }
+    const chat = await getPrisma().chat.findUnique({
+      where: { id: chatId },
+      select: { id: true, escalatedAt: true },
+    })
+    if (!chat) return { kind: 'skipped', reason: 'chat not found' }
+
+    const trigger = await escalationTrigger(chat, burst, settings)
+    if (trigger) {
+      const result = await escalate(deviceId, chatId, settings)
+      return result.ok
+        ? { kind: 'escalated' }
+        : { kind: 'failed', code: 'SEND_FAILED', message: result.message }
+    }
+
+    const cap = await capReached(deviceId, chatId, config)
+    if (cap) {
+      toastCapOnce(deviceId, cap)
+      return { kind: 'skipped', reason: `AI daily cap reached (${cap})` }
+    }
+
+    const key = await readKey(config.provider)
+    if (!key && config.provider !== 'compatible') {
+      // Deliberately an error, not a skip: the user configured auto-reply and
+      // it is not happening, and they need to know exactly why.
+      return {
+        kind: 'failed',
+        code: 'AI_KEY_MISSING',
+        message: `No ${PROVIDER_LABEL[config.provider]} API key is configured. Add one on the AI Bot screen to enable auto-replies.`,
       }
     }
-    return { kind: 'escalated' }
-  }
 
-  const key = await apiKey()
-  if (!key) {
-    // Deliberately an error, not a skip: the user configured auto-reply and it
-    // is not happening, and they need to know exactly why.
-    return {
-      kind: 'failed',
-      code: 'AI_KEY_MISSING',
-      message:
-        'No OpenAI API key is configured. Add one in Settings to enable auto-replies.',
+    let text: string
+    try {
+      const result = await complete({
+        provider: config.provider,
+        model: config.model,
+        baseUrl: config.baseUrl,
+        apiKey: key,
+        system: buildSystemPrompt(settings),
+        turns,
+        maxTokens: config.maxTokens,
+        temperature: config.temperature,
+      })
+      await recordUsage({
+        deviceId,
+        chatId,
+        provider: config.provider,
+        model: config.model,
+        promptTokens: result.promptTokens,
+        completionTokens: result.completionTokens,
+      })
+      text = result.text
+    } catch (err) {
+      // `complete` maps every provider failure onto the taxonomy.
+      const mapped =
+        err instanceof AppError
+          ? err
+          : new AppError('UNKNOWN', { userMessage: 'The AI request failed.' })
+      return { kind: 'failed', code: mapped.code, message: mapped.userMessage }
     }
-  }
 
-  const historyDepth = await numberSetting('ai.historyDepth', DEFAULT_HISTORY_DEPTH)
-  // The incoming message is already stored by the time this runs, and
-  // `buildMessages` appends it as the final user turn — so it is excluded here,
-  // or the model would see the customer say it twice.
-  const recent = await getPrisma().message.findMany({
-    where: { chatId, id: { not: incoming.id } },
-    orderBy: { timestamp: 'desc' },
-    take: historyDepth,
-  })
+    // A newer message arrived while the model was thinking: that call will
+    // answer with the fuller conversation, so this answer is dropped.
+    if (!(await waitForQuiet(ticket, 0))) return { kind: 'skipped', reason: 'coalesced' }
+    if (text === '') return { kind: 'skipped', reason: 'model returned nothing' }
 
-  const history: HistoryMessage[] = recent
-    .reverse()
-    .filter((m) => m.body && m.body.trim() !== '')
-    .map((m) => ({
-      role: m.direction === 'out' ? ('assistant' as const) : ('user' as const),
-      content: m.body!,
-    }))
-
-  const model = (await setting('ai.model')) ?? DEFAULT_MODEL
-  const maxTokens = await numberSetting('ai.maxTokens', DEFAULT_MAX_TOKENS)
-  const temperature = await numberSetting('ai.temperature', DEFAULT_TEMPERATURE)
-
-  let text: string
-  try {
-    const completion = await client(key).chat.completions.create({
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      messages: buildMessages(settings, history, incoming.body),
-    })
-    text = completion.choices[0]?.message?.content?.trim() ?? ''
-  } catch (err) {
-    const mapped = mapError(err)
-    return { kind: 'failed', code: mapped.code, message: mapped.userMessage }
-  }
-
-  if (text === '') {
-    return { kind: 'skipped', reason: 'model returned nothing' }
-  }
-
-  // Human-like pause before replying, as configured.
-  if (settings.responseDelay > 0) {
-    await new Promise((r) => setTimeout(r, settings.responseDelay * 1_000))
-  }
-
-  try {
-    await sendBotText(deviceId, chatId, text)
-  } catch (err) {
-    return {
-      kind: 'failed',
-      code: 'SEND_FAILED',
-      message: err instanceof Error ? err.message : String(err),
+    // Human-like pause before replying, as configured.
+    if (settings.responseDelay > 0) {
+      await new Promise((r) => setTimeout(r, settings.responseDelay * 1_000))
     }
+    return await deliver(deviceId, chatId, text, config)
+  } finally {
+    release(ticket)
   }
-
-  return { kind: 'replied', text }
 }

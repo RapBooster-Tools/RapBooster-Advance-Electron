@@ -1,17 +1,7 @@
 import { getPrisma } from '../db/client'
+import { invalidateBotSettings, parseKeywords } from '../services/ai/ai-config'
 import { testKey } from '../services/ai/responder'
 import { registerHandler } from './router'
-
-function parseKeywords(value: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return Array.isArray(parsed)
-      ? parsed.filter((k): k is string => typeof k === 'string')
-      : []
-  } catch {
-    return []
-  }
-}
 
 /** Created on first read so the screen always has something to render. */
 async function loadOrCreate() {
@@ -19,7 +9,10 @@ async function loadOrCreate() {
     where: { id: 'singleton' },
   })
   if (existing) return existing
-  return getPrisma().chatbotConfig.create({ data: { id: 'singleton' } })
+  const created = await getPrisma().chatbotConfig.create({ data: { id: 'singleton' } })
+  // The responder may have cached "no configuration yet".
+  invalidateBotSettings()
+  return created
 }
 
 export function registerChatbotHandlers(): void {
@@ -74,6 +67,7 @@ export function registerChatbotHandlers(): void {
         knowledgeBase: input.knowledgeBase,
       },
     })
+    invalidateBotSettings()
 
     return {
       ...input,
@@ -81,5 +75,7 @@ export function registerChatbotHandlers(): void {
     }
   })
 
-  registerHandler('chatbot:testKey', async ({ apiKey }) => testKey(apiKey))
+  registerHandler('chatbot:testKey', async ({ apiKey, provider }) =>
+    testKey(apiKey, provider),
+  )
 }
