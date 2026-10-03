@@ -781,11 +781,16 @@ model FlowSession {
 /// Contacts each linked phone knows (its address book and chats), as reported
 /// by WhatsApp. The grabber exports these into a contact list.
 model WaContact {
-  deviceId  String
-  jid       String
-  phone     String
-  name      String?
-  updatedAt DateTime @updatedAt
+  deviceId      String
+  jid           String
+  phone         String
+  name          String?
+  /// Saved in the phone's address book.
+  inAddressBook Boolean   @default(true)
+  /// Has a one-to-one chat with this phone (synced chat list or the inbox).
+  hasChat       Boolean   @default(false)
+  lastChatAt    DateTime?
+  updatedAt     DateTime  @updatedAt
 
   device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 

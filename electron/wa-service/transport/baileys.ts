@@ -22,6 +22,7 @@ import makeWASocket, {
   jidNormalizedUser,
   proto,
   useMultiFileAuthState,
+  type Chat,
   type Contact,
   type WAMessage,
   type WASocket,
@@ -32,8 +33,12 @@ import { basename } from 'node:path'
 import { TransportEmitter } from './emitter'
 import { resolveLinkPreview } from '../link-preview'
 import { buttonsAsNumberedText } from '../../../shared/template-buttons'
-import type { WaButton } from '../../../shared/wa-protocol'
-import type { WaRequests, WaResponses } from '../../../shared/wa-protocol'
+import type {
+  WaButton,
+  WaRequests,
+  WaResponses,
+  WaSyncedContact,
+} from '../../../shared/wa-protocol'
 import type {
   GroupMetadata,
   IncomingMessage,
@@ -365,30 +370,68 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       }
     })
 
-    // The phone's address book arrives in pieces: the initial history sync,
-    // then upserts and updates. Only entries with a real phone number are
-    // useful to the grabber; LID-only contacts cannot be messaged by number.
-    const forwardContacts = (raw: Array<Partial<Contact>>) => {
-      const contacts = raw.flatMap((c) => {
-        const pn = [c.phoneNumber, c.id].find(
-          (j): j is string => typeof j === 'string' && j.endsWith('@s.whatsapp.net'),
-        )
-        if (!pn) return []
+    // The phone's address book and chat list arrive in pieces: the initial
+    // history sync, then upserts and updates. Only entries with a real phone
+    // number are useful to the grabber; a LID-only entry cannot be messaged by
+    // number, so it is kept only when WhatsApp told us its phone number.
+    const lidToPn = new Map<string, string>()
+    const phoneOf = (...jids: Array<string | null | undefined>): string | null => {
+      for (const j of jids) {
+        if (typeof j !== 'string') continue
+        const pn = j.endsWith('@lid') ? lidToPn.get(j) : j
+        if (!pn?.endsWith('@s.whatsapp.net')) continue
         const digits = (pn.split('@')[0] ?? '').split(':')[0] ?? ''
-        if (digits.length < 7) return []
-        return [
-          {
-            jid: pn,
-            phone: `+${digits}`,
-            name: c.name ?? c.notify ?? c.verifiedName ?? null,
-          },
-        ]
-      })
-      if (contacts.length > 0) this.emit('contacts', deviceId, contacts)
+        if (digits.length >= 7) return digits
+      }
+      return null
     }
-    socket.ev.on('messaging-history.set', ({ contacts }) => forwardContacts(contacts))
+    const emitSynced = (synced: WaSyncedContact[]) => {
+      if (synced.length > 0) this.emit('contacts', deviceId, synced)
+    }
+    const forwardContacts = (raw: Array<Partial<Contact>>) =>
+      emitSynced(
+        raw.flatMap((c) => {
+          const digits = phoneOf(c.phoneNumber, c.id)
+          if (!digits) return []
+          return [
+            {
+              jid: `${digits}@s.whatsapp.net`,
+              phone: `+${digits}`,
+              name: c.name ?? c.notify ?? c.verifiedName ?? null,
+              source: 'addressBook' as const,
+            },
+          ]
+        }),
+      )
+    // WHY chats too: the address book misses everyone who messaged the user
+    // without being saved — often exactly the leads a business wants.
+    const forwardChats = (raw: Array<Partial<Chat>>) =>
+      emitSynced(
+        raw.flatMap((c) => {
+          // Groups, broadcast lists, Status and channels are not people.
+          if (!c.id || !/@(s\.whatsapp\.net|lid)$/.test(c.id)) return []
+          const digits = phoneOf(c.pnJid, c.id)
+          if (!digits) return []
+          const ts = c.conversationTimestamp ? Number(c.conversationTimestamp) : 0
+          return [
+            {
+              jid: `${digits}@s.whatsapp.net`,
+              phone: `+${digits}`,
+              name: c.name ?? c.displayName ?? null,
+              source: 'chat' as const,
+              lastChatAt: ts > 0 ? new Date(ts * 1000).toISOString() : null,
+            },
+          ]
+        }),
+      )
+    socket.ev.on('messaging-history.set', ({ contacts, chats, lidPnMappings }) => {
+      for (const m of lidPnMappings ?? []) lidToPn.set(m.lid, m.pn)
+      forwardContacts(contacts)
+      forwardChats(chats)
+    })
     socket.ev.on('contacts.upsert', (contacts) => forwardContacts(contacts))
     socket.ev.on('contacts.update', (contacts) => forwardContacts(contacts))
+    socket.ev.on('chats.upsert', (chats) => forwardChats(chats))
 
     socket.ev.on('labels.edit', (label) => {
       this.emit('label', deviceId, {

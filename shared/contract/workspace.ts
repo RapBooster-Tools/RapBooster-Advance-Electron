@@ -133,7 +133,15 @@ export const waContact = z.object({
   jid: z.string(),
   phone: z.string(),
   name: z.string().nullable(),
+  /** Saved in the phone's address book. */
+  inAddressBook: z.boolean(),
+  /** Has a one-to-one chat with the phone — includes people never saved. */
+  hasChat: z.boolean(),
+  lastChatAt: nullableIso,
 })
+
+/** Where the grabber takes numbers from. */
+export const waContactSource = z.enum(['all', 'addressBook', 'chats'])
 
 export const appPrefs = z.object({
   /** Desktop notification for new inbound messages while the window is unfocused. */
@@ -208,6 +216,7 @@ export const workspaceChannels = {
   'waContacts:list': {
     request: z.object({
       deviceId: id.optional(),
+      source: waContactSource.default('all'),
       search: z.string().optional(),
       onlyNamed: z.boolean().default(false),
       cursor,
@@ -219,6 +228,9 @@ export const workspaceChannels = {
   'waContacts:export': {
     request: z.object({
       deviceIds: z.array(id).min(1),
+      source: waContactSource.default('all'),
+      /** With source `chats`: only chats active since this moment. */
+      chattedSince: isoDate.optional(),
       listName: z.string().trim().min(1).max(100),
       onlyNamed: z.boolean().default(false),
     }),

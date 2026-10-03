@@ -58,7 +58,7 @@ import { postTick } from './services/post-scheduler'
 import { heldDraftTick } from './services/ai/drafts'
 import { scheduledMessageTick } from './services/scheduled-messages'
 import { flowTick } from './services/flows/engine'
-import { persistWaContacts } from './services/wa-contacts'
+import { persistWaContacts, recordChatContact } from './services/wa-contacts'
 import {
   attachWindow,
   initDesktop,
@@ -313,6 +313,14 @@ function startWaService(): void {
           preview: saved.body,
           isGroup: message.isGroup,
         })
+        if (!message.isGroup) {
+          void recordChatContact(
+            deviceId,
+            message.from,
+            message.pushName,
+            new Date(saved.timestamp),
+          ).catch((err: unknown) => console.error('could not record a chat contact', err))
+        }
 
         // Everything else — opt-outs, attribution, rules, the bot — runs after
         // the message is stored and shown, so the user sees it immediately.

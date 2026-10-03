@@ -292,6 +292,20 @@ export interface WaResponseEnvelope<K extends WaRequestKind = WaRequestKind> {
 
 // ──────────────────────────────── events ─────────────────────────────────
 
+/**
+ * One number a linked phone knows. `source` says where WhatsApp reported it:
+ * the phone's address book, or a chat in its chat list (which also covers
+ * people who messaged the user but were never saved).
+ */
+export interface WaSyncedContact {
+  jid: string
+  phone: string
+  name: string | null
+  source: 'addressBook' | 'chat'
+  /** Last activity in the chat, ISO; only for `source: 'chat'`. */
+  lastChatAt?: string | null
+}
+
 export interface WaEvents {
   status: { deviceId: string; status: DeviceStatus; phone?: string; error?: string }
   qr: { deviceId: string; qr: string }
@@ -331,7 +345,7 @@ export interface WaEvents {
   /** Address-book / chat contacts the phone knows, as WhatsApp syncs them. */
   contacts: {
     deviceId: string
-    contacts: Array<{ jid: string; phone: string; name: string | null }>
+    contacts: WaSyncedContact[]
   }
   /** Emitted after the reconnect budget is exhausted, so main can inform the user. */
   giveUp: { deviceId: string; attempts: number; detail: string }

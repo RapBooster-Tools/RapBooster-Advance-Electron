@@ -22,6 +22,7 @@ import type {
   WaRequests,
   WaResponses,
   WaStatusContent,
+  WaSyncedContact,
 } from '../../../shared/wa-protocol'
 
 /** Outgoing messages are exactly the protocol's shapes — one definition, no drift. */
@@ -79,10 +80,7 @@ export interface TransportEvents {
     deviceId: string,
     association: { labelId: string; chatJid: string; action: 'add' | 'remove' },
   ) => void
-  contacts: (
-    deviceId: string,
-    contacts: Array<{ jid: string; phone: string; name: string | null }>,
-  ) => void
+  contacts: (deviceId: string, contacts: WaSyncedContact[]) => void
 }
 
 type Payload<K extends keyof WaRequests> = Omit<WaRequests[K], 'deviceId'>

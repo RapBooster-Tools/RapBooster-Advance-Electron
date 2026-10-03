@@ -324,16 +324,33 @@ export class MockTransport extends TransportEmitter implements Transport {
 
         // The phone's address book, as WhatsApp's history sync would deliver
         // it: 12 contacts, three without a saved name, one shared with the
-        // fixture groups so de-duplication is exercised.
+        // fixture groups so de-duplication is exercised...
         const book = Array.from({ length: 12 }, (_, i) => {
           const phone = i === 0 ? memberPhone(1, 1) : `+9197${String(i).padStart(8, '0')}`
           return {
             jid: jidOf(phone),
             phone,
             name: i % 4 === 3 ? null : `Book Contact ${i + 1}`,
+            source: 'addressBook' as const,
           }
         })
         this.emit('contacts', deviceId, book)
+
+        // ...and its chat list: 6 one-to-one chats, the first two with people
+        // already in the address book (so a number known both ways is
+        // exercised), the other four never saved — two of those unnamed.
+        const chats = Array.from({ length: 6 }, (_, i) => {
+          const phone = i < 2 ? book[i + 1]!.phone : `+9196${String(i).padStart(8, '0')}`
+          return {
+            jid: jidOf(phone),
+            phone,
+            name:
+              i < 2 ? (book[i + 1]!.name ?? null) : i % 2 === 0 ? `Chat Lead ${i}` : null,
+            source: 'chat' as const,
+            lastChatAt: new Date(Date.now() - i * 3_600_000).toISOString(),
+          }
+        })
+        this.emit('contacts', deviceId, chats)
 
         // Inbox specs need inbound traffic. Driving it from here rather than
         // exposing a "simulate" IPC channel keeps the test hook inside code that
