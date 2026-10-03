@@ -19,6 +19,11 @@ developer tool.
 | `renderer/components/preview/*`                    | `PhonePreview`, `renderWhatsAppFormatting`          |
 | `tests/e2e/design-system.spec.ts`                  | E7.1–E7.10                                          |
 
+**Adoption (2026-10-03).** Every screen follows the theme through tokens, but most pages are
+not yet rebuilt on these primitives (T-1439), and the phone preview is mounted only in
+Settings › Appearance so far, not in the template, campaign and sequence composers (T-1440).
+Decision: D145.
+
 ---
 
 ## 1. Principles
@@ -54,6 +59,10 @@ How it works:
   and E7.3 asserts that.
 - `ThemeProvider` exposes `useTheme()` → `{ preference, resolved, setPreference,
 sidebarCollapsed, setSidebarCollapsed }` and follows the OS change while on _System_.
+- The window frame follows too: `ThemeProvider` calls `system:setThemeSource`, which sets
+  Electron's `nativeTheme.themeSource` (so the OS title bar matches a forced Light or Dark)
+  and the window's background colour (so a launch never flashes light in dark mode). E7.2
+  asserts it.
 - Preferences live in `localStorage` on purpose: they are per-machine cosmetics, and only
   a synchronous read can beat the first paint. Losing them costs nothing but the default.
 

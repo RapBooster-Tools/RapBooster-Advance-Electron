@@ -10,8 +10,8 @@ Rules for every coding session in this repository. Read this **before** touching
 | [docs/TASKS.md](./docs/TASKS.md)                 | What is left — every task as a checkbox, done and open                |
 | [docs/DECISIONS.md](./docs/DECISIONS.md)         | Why — every decision (D1…) with its reasoning and status              |
 | [docs/ROADMAP.md](./docs/ROADMAP.md)             | What comes next — waves, candidates, product questions                |
-| [docs/DESIGN-SYSTEM.md](./docs/DESIGN-SYSTEM.md) | UI tokens, components, themes (Wave 3, in progress)                   |
-| [docs/USER-GUIDE.md](./docs/USER-GUIDE.md)       | End-user guide (Wave 3, coming)                                       |
+| [docs/DESIGN-SYSTEM.md](./docs/DESIGN-SYSTEM.md) | UI tokens, components, themes — read before building a screen (D145)  |
+| [docs/USER-GUIDE.md](./docs/USER-GUIDE.md)       | End-user guide (Wave 4, in progress)                                  |
 | [REQUIREMENTS.md](./REQUIREMENTS.md)             | Customer inputs still open — answered items move to DECISIONS         |
 | [RELEASE.md](./RELEASE.md)                       | How to build, sign and publish a release                              |
 | `design/`                                        | Original HTML prototypes — reference only, **never import from here** |
@@ -25,27 +25,30 @@ Each fact lives in exactly one of these; link to it rather than copying it.
 RapBooster Advance is a licensed Windows and macOS desktop app for WhatsApp marketing: Electron
 shell, Next.js renderer, Baileys for WhatsApp, local SQLite per OS user. It connects up to 20
 WhatsApp accounts concurrently and runs bulk campaigns, drip sequences, group tools, status and
-Channels posts, a unified inbox, keyword auto-replies, webhooks and a multi-provider AI
-responder. Twelve screens: the prototype's nine (`SPRINTS.md` §2) plus three from the Sprint 5
-marketing suite (§15). Sprints 0–5 are done and Wave 3 is in progress (tracker §1). Every
-milestone ends with Playwright E2E tests, a commit, and a push to `main`.
+Channels posts, a unified inbox with quick replies and scheduled messages, chatbot flows,
+welcome/away and keyword auto-replies, webhooks and a multi-provider AI responder, with
+desktop notifications and a tray. Twelve screens: the prototype's nine (`SPRINTS.md` §2), three
+from the Sprint 5 marketing suite (§15); Wave 3 (§16) added flows, imports, desktop and the
+design system without new screens. Sprints 0–5 and Wave 3 are done; Wave 4 (help) is in
+progress (tracker §1). Every milestone ends with Playwright E2E tests, a commit, and a push to
+`main`.
 
 ### 1.1 Non-negotiable decisions
 
 Do not revisit these without an explicit customer instruction recorded in `docs/DECISIONS.md`.
 
-| Topic       | Decision                                                                                                                                |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Scope       | 9 prototype screens + the marketing suite (D79, D117) + Wave 3 (D122–D125). Number Filter, Group Grabber, Warmup and Spintax are **in** |
-| Processes   | main + preload + renderer + `wa-service` utility process                                                                                |
-| Renderer    | Next.js `output: 'export'`, client-only, no SSR, no API routes                                                                          |
-| Database    | SQLite at `app.getPath('userData')`, Prisma + better-sqlite3, **main is the sole writer**                                               |
-| WhatsApp    | Baileys, pinned exactly, wrapped behind our own transport interface                                                                     |
-| Concurrency | 20 devices max, **one in-flight message per device**                                                                                    |
-| Licensing   | Remote server, hard gate before the main window exists                                                                                  |
-| AI          | OpenAI, Anthropic, Gemini or OpenAI-compatible; end-user keys via `safeStorage` (D114)                                                  |
-| Platforms   | Windows and macOS, both signed (D85, D119); English-only UI (D118)                                                                      |
-| Branch      | Work on `main`, commit and push at each milestone (D121)                                                                                |
+| Topic       | Decision                                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Scope       | 9 prototype screens + the marketing suite (D79, D117) + Wave 3 (D122, D124, D125) + help (D123). Number Filter, Group Grabber, Warmup and Spintax are **in** |
+| Processes   | main + preload + renderer + `wa-service` utility process                                                                                                     |
+| Renderer    | Next.js `output: 'export'`, client-only, no SSR, no API routes                                                                                               |
+| Database    | SQLite at `app.getPath('userData')`, Prisma + better-sqlite3, **main is the sole writer**                                                                    |
+| WhatsApp    | Baileys, pinned exactly, wrapped behind our own transport interface                                                                                          |
+| Concurrency | 20 devices max, **one in-flight message per device**                                                                                                         |
+| Licensing   | Remote server, hard gate before the main window exists                                                                                                       |
+| AI          | OpenAI, Anthropic, Gemini or OpenAI-compatible; end-user keys via `safeStorage` (D114)                                                                       |
+| Platforms   | Windows and macOS, both signed (D85, D119); English-only UI (D118)                                                                                           |
+| Branch      | Work on `main`, commit and push at each milestone (D121)                                                                                                     |
 
 ---
 
@@ -65,8 +68,9 @@ These are invariants. Breaking one is a bug even if tests pass.
 4. **`wa-service` never writes to SQLite.** It asks main to persist and reports results. One
    writer, no lock contention, one place to audit.
 5. **Nothing calls `sock.sendMessage` directly.** Every outbound WhatsApp action — campaign
-   message, group message, inbox reply, AI reply — goes through the throttle scheduler in
-   `wa-service/throttle.ts`. This is the anti-ban core; bypassing it risks the user's accounts.
+   message, group message, inbox reply, scheduled message, flow step, AI reply — goes through
+   the throttle scheduler in `wa-service/throttle.ts`. This is the anti-ban core; bypassing it
+   risks the user's accounts.
 6. **Campaign state lives in SQLite, never in memory.** Counters are recomputed from
    `CampaignRecipient` rows. A process restart must be able to rebuild everything from the
    database alone.
@@ -76,7 +80,7 @@ These are invariants. Breaking one is a bug even if tests pass.
    confirmed the UI is rebuilt cleanly, not copied.
 9. **One inbound pipeline, one clock.** Automation that reacts to a message is a step in
    `services/inbound.ts`, in its fixed order; anything time-driven registers a job with
-   `services/scheduler.ts`. No feature owns a timer (D89).
+   `services/scheduler.ts`. No feature owns a timer (D89, D130).
 
 ---
 
@@ -371,19 +375,25 @@ and commit everything in one commit.
 
 Things that will bite, listed so nobody rediscovers them the expensive way.
 
-| Pitfall                                         | Correct approach                                          |
-| ----------------------------------------------- | --------------------------------------------------------- |
-| Calling `sendMessage` outside the scheduler     | Always go through `throttle.acquire()` first              |
-| Incrementing campaign counters in memory        | Recompute from `CampaignRecipient` with `GROUP BY status` |
-| Polling for campaign progress from the renderer | Subscribe to the `campaign:progress` event                |
-| Writing to SQLite from `wa-service`             | Send a message to main and let it persist                 |
-| Reconnecting in a tight loop                    | Exponential backoff + jitter + circuit breaker            |
-| Treating every disconnect as fatal              | Only `DisconnectReason.loggedOut` is terminal             |
-| Loading all contacts to render a table          | Cursor pagination + virtualization                        |
-| Parsing a 50k CSV on the main thread            | Stream it in a worker, insert in batches of 1,000         |
-| Logging a phone number or license key           | The logger redacts automatically — never bypass it        |
-| Assuming `safeStorage` is available             | Check `isEncryptionAvailable()` and degrade explicitly    |
-| Testing against a real WhatsApp account         | Use the mock transport — a ban is unrecoverable           |
+| Pitfall                                         | Correct approach                                                                   |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Calling `sendMessage` outside the scheduler     | Always go through `throttle.acquire()` first                                       |
+| Incrementing campaign counters in memory        | Recompute from `CampaignRecipient` with `GROUP BY status`                          |
+| Polling for campaign progress from the renderer | Subscribe to the `campaign:progress` event                                         |
+| Writing to SQLite from `wa-service`             | Send a message to main and let it persist                                          |
+| Reconnecting in a tight loop                    | Exponential backoff + jitter + circuit breaker                                     |
+| Treating every disconnect as fatal              | Only `DisconnectReason.loggedOut` is terminal                                      |
+| Loading all contacts to render a table          | Cursor pagination + virtualization                                                 |
+| Parsing a 50k CSV on the main thread            | Stream it in a worker, insert in batches of 1,000                                  |
+| Logging a phone number or license key           | The logger redacts automatically — never bypass it                                 |
+| Assuming `safeStorage` is available             | Check `isEncryptionAvailable()` and degrade explicitly                             |
+| Testing against a real WhatsApp account         | Use the mock transport — a ban is unrecoverable                                    |
+| `.partial()` on a zod schema with defaults      | zod 4 fills the defaults in; build patches with `patchOf()` (D146)                 |
+| Naming a group chat from the sender's push name | Name it from `Group.name`; a push name is one member (D148)                        |
+| Trusting a dependency's worker or asset in dev  | Assert it in `self-test.ts` — only the package proves it ships                     |
+| A test-only env var or global seam              | Guard it with `NODE_ENV === 'test'` so it is inert in production (D92, D149)       |
+| Resolving a sibling file from `__dirname`       | Probe a candidate list — Rollup may move a shared module into `chunks/` (D150)     |
+| Treating a `@lid` JID's digits as a phone       | Resolve through `LidResolver`; unresolved stays `<id>@lid`, shown as hidden (D129) |
 
 ---
 

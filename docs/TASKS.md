@@ -25,24 +25,24 @@ _Customer_
 
 ## Summary
 
-| Epic                                                             | Done | Open |
-| ---------------------------------------------------------------- | ---- | ---- |
-| [1. Foundation](#1-foundation)                                   | 18   | 0    |
-| [2. Audience](#2-audience)                                       | 6    | 0    |
-| [3. Campaigns](#3-campaigns)                                     | 13   | 0    |
-| [4. Rich messages and templates](#4-rich-messages-and-templates) | 7    | 0    |
-| [5. Groups](#5-groups)                                           | 9    | 0    |
-| [6. Broadcast](#6-broadcast)                                     | 4    | 0    |
-| [7. Inbox and automation](#7-inbox-and-automation)               | 5    | 0    |
-| [8. Sequences](#8-sequences)                                     | 5    | 0    |
-| [9. AI](#9-ai)                                                   | 9    | 0    |
-| [10. Devices and safety](#10-devices-and-safety)                 | 11   | 0    |
-| [11. Docs](#11-docs)                                             | 4    | 0    |
-| [12. Packaging](#12-packaging)                                   | 8    | 0    |
-| [13. Wave 3 — in progress](#13-wave-3--in-progress)              | 1    | 14   |
-| [14. Known gaps](#14-known-gaps)                                 | 0    | 27   |
-| [15. Blocked on the customer](#15-blocked-on-the-customer)       | 0    | 6    |
-| [16. Release](#16-release)                                       | 0    | 7    |
+| Epic                                                                              | Done | Open |
+| --------------------------------------------------------------------------------- | ---- | ---- |
+| [1. Foundation](#1-foundation)                                                    | 18   | 0    |
+| [2. Audience](#2-audience)                                                        | 6    | 0    |
+| [3. Campaigns](#3-campaigns)                                                      | 13   | 0    |
+| [4. Rich messages and templates](#4-rich-messages-and-templates)                  | 7    | 0    |
+| [5. Groups](#5-groups)                                                            | 9    | 0    |
+| [6. Broadcast](#6-broadcast)                                                      | 4    | 0    |
+| [7. Inbox and automation](#7-inbox-and-automation)                                | 5    | 0    |
+| [8. Sequences](#8-sequences)                                                      | 5    | 0    |
+| [9. AI](#9-ai)                                                                    | 9    | 0    |
+| [10. Devices and safety](#10-devices-and-safety)                                  | 12   | 0    |
+| [11. Docs](#11-docs)                                                              | 5    | 0    |
+| [12. Packaging](#12-packaging)                                                    | 9    | 0    |
+| [13. Wave 3 — workspace, automation, help](#13-wave-3--workspace-automation-help) | 11   | 4    |
+| [14. Known gaps](#14-known-gaps)                                                  | 2    | 40   |
+| [15. Blocked on the customer](#15-blocked-on-the-customer)                        | 0    | 6    |
+| [16. Release](#16-release)                                                        | 0    | 7    |
 
 ---
 
@@ -162,6 +162,7 @@ _Customer_
 - [x] **T-1009** ✅ Typing simulation before automated sends — _Devices agent_ · E6.66
 - [x] **T-1010** ✅ Sending & safety settings, 7-day dashboard chart, safety notice — _Devices agent_ · E6.68, E6.69
 - [x] **T-1011** ✅ One daily send counter for every sender — _Coordinator_ · D94
+- [x] **T-1012** ✅ LID → phone number resolution everywhere; a hidden number is never used or shown as one, and is repaired when revealed — _Coordinator_ · D129 · E8.80–E8.86
 
 ## 11. Docs
 
@@ -169,6 +170,7 @@ _Customer_
 - [x] **T-1102** ✅ RELEASE.md: build, sign and publish procedure — _Coordinator_
 - [x] **T-1103** ✅ Improvement plan, now [ROADMAP.md](./ROADMAP.md) — _Coordinator_
 - [x] **T-1104** ✅ README rewritten for the expanded product — _Docs agent_
+- [x] **T-1105** ✅ Wave 3 recorded: D129–D150, SPRINTS.md §16, tracker, README, CLAUDE.md §9 — _Docs agent_
 
 ## 12. Packaging
 
@@ -180,36 +182,38 @@ _Customer_
 - [x] **T-1206** ✅ macOS packaging: dmg + zip, arm64 + x64 — _Coordinator_ · D85
 - [x] **T-1207** ✅ Latest stable dependencies, three held — _Coordinator_ · D86
 - [x] **T-1208** ✅ Migration safety gate `check:migrations` — _Coordinator_ · D90
+- [x] **T-1209** ✅ Find wa-service by probing, not `__dirname`; the self-test asserts the entry — _Coordinator_ · D150
 
 ---
 
-## 13. Wave 3 — in progress
+## 13. Wave 3 — workspace, automation, help
 
-Customer decisions D122–D125 (2026-10-03). Test IDs are assigned when each spec is written
-(SPRINTS.md gets a Sprint 6 section).
+Customer decisions D122–D125 (2026-10-03). T-1301–T-1311 merged to `main` on 2026-10-03
+(`a1a4e73`); spec and test IDs in [SPRINTS.md §16](../SPRINTS.md#16-wave-3--workspace-automation-and-design-system).
+The help system (T-1312–T-1315) is Wave 4, SPRINTS.md §17.
 
-- [ ] **T-1301** 🟡 Design system: tokens, components, light and dark themes, WhatsApp phone preview — _Design agent_ · D122 · [DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md)
+- [x] **T-1301** ✅ Design system: tokens, primitives, light and dark themes, grouped shell, WhatsApp phone preview — _Design agent_ · D122, D145 · E7.1–E7.10 · [DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md)
 - [x] **T-1302** ✅ Docs restructure: DECISIONS, TASKS, ROADMAP, tracker dashboard — _Docs agent_
-- [ ] **T-1303** ⬜ Quick replies (saved snippets in the composer) — _Inbox agent_ · D124
-- [ ] **T-1304** ⬜ Contact side panel with notes, tags and campaign history — _Inbox agent_ · D124
-- [ ] **T-1305** ⬜ Desktop notifications, tray icon, run in background, start at login — _Coordinator_ · D124
-- [ ] **T-1306** ⬜ Scheduled messages per chat — _Inbox agent_ · D124
-- [ ] **T-1307** ⬜ Visual chatbot flow builder — _Automation agent_ · D125
-- [ ] **T-1308** ⬜ Welcome and away messages — _Automation agent_ · D125
-- [ ] **T-1309** 🟡 WhatsApp contacts grabber: address book **and chats** (incl. unsaved numbers) to a list — _Contacts agent_ · D125, D128 — foundation on main (e893e33)
-- [ ] **T-1310** ⬜ Excel (.xlsx) and vCard (.vcf) import — _Audience agent_ · D125
-- [ ] **T-1311** ⬜ Native file picker wired everywhere a path is typed today (contacts CSV, opt-out import, template media, voice, sticker, restore) — _Coordinator_ · D96
-- [ ] **T-1312** ⬜ First-run setup wizard: link a device → import contacts → first template → first campaign — _Help agent_ · D123
-- [ ] **T-1313** ⬜ Help panel and tooltips on every screen — _Help agent_ · D123
-- [ ] **T-1314** ⬜ Interactive guided tours — _Help agent_ · D123
-- [ ] **T-1315** ⬜ In-app Help Center and [USER-GUIDE.md](./USER-GUIDE.md) — _Docs agent_ · D123
+- [x] **T-1303** ✅ Quick replies: manage dialog, `/` picker, merge tags, use counts — _Inbox agent_ · D124, D135 · E8.1–E8.5, E8.19
+- [x] **T-1304** ✅ Contact side panel: profile, list fields and tags, campaign history, sequences, private notes — _Inbox agent_ · D124 · E8.6–E8.8
+- [x] **T-1305** ✅ Desktop notifications, tray, run in background, start at login, hidden start — _Desktop agent_ · D124, D142–D144 · E8.60–E8.73
+- [x] **T-1306** ✅ Scheduled messages per chat, with attachments, through the throttle — _Inbox agent_ · D124, D134 · E8.9–E8.15
+- [x] **T-1307** ✅ Visual chatbot flow builder, flow engine and test simulator — _Automation agent_ · D125, D130–D132, D146, D147 · E8.20–E8.35
+- [x] **T-1308** ✅ Welcome and away messages with weekly hours — _Automation agent_ · D125, D133 · E8.36–E8.39
+- [x] **T-1309** ✅ WhatsApp contacts grabber: address book **and chats** (incl. unsaved numbers) to a list — _Contacts agent_ · D125, D128, D140 · E8.50–E8.59
+- [x] **T-1310** ✅ Excel (.xlsx) and vCard (.vcf) import — _Contacts agent_ · D125, D136–D139 · E8.40–E8.48
+- [x] **T-1311** ✅ Native file picker wherever a path was typed (contacts, opt-outs, broadcast and template media, voice, sticker) — _Contacts agent_, _Coordinator_ · D96, D141 · E8.17, E8.47
+- [ ] **T-1312** 🟡 First-run setup wizard: link a device → import contacts → first template → first campaign — _Help agent_ · D123
+- [ ] **T-1313** 🟡 Help panel and tooltips on every screen — _Help agent_ · D123
+- [ ] **T-1314** 🟡 Interactive guided tours — _Help agent_ · D123
+- [ ] **T-1315** 🟡 In-app Help Center and [USER-GUIDE.md](./USER-GUIDE.md) — _Help agent_ · D123
 
 ## 14. Known gaps
 
 Found by the D89 feature agents and the post-merge review. Each is either fixed here or
 accepted with a reason in the tracker's known issues.
 
-- [ ] **T-1401** ⬜ Rich messages show only a one-line summary in the inbox thread — no map, poll or audio player — _Inbox agent_ · K13
+- [ ] **T-1401** ⬜ Inbox rich messages are labelled cards since Wave 3 (E8.16), but there is no map, poll result, audio player or image thumbnail — _Inbox agent_ · K13
 - [ ] **T-1402** ⬜ No push event for new calls or webhook deliveries; those tables refresh on open or Refresh — _Automation agent_ · K14
 - [ ] **T-1403** ⬜ Group settings panel does not prefill the current description (no channel returns it) — _Groups agent_ · K15
 - [ ] **T-1404** ⬜ A product template can be sent from a device whose catalog lacks the product — _Rich agent_ · K16
@@ -225,17 +229,35 @@ accepted with a reason in the tracker's known issues.
 - [ ] **T-1414** ⬜ Untested paths: time escalation trigger, OpenAI-compatible provider, AI skip for suppressed numbers — _AI agent_
 - [ ] **T-1415** ⬜ Untested paths: keyword rule on a suppressed number, sequence enrollment by contact ids, `sequence.completed` webhook — _Automation agent_
 - [ ] **T-1416** ⬜ Mock `createGroup` does not log the description, so E5.68 cannot assert it — _Groups agent_
-- [ ] **T-1417** ⬜ Split oversize files: `chatbot/page.tsx` (457 lines), `inbox/page.tsx` (429), `rule-dialog.tsx` (305) — _Coordinator_
+- [ ] **T-1417** ⬜ Split oversize files: `chatbot/page.tsx` (457 lines), `chat.ipc.ts` (427), `contact.ipc.ts` (364), `rule-dialog.tsx` (305); `inbox/page.tsx` was split in Wave 3 — _Coordinator_
 - [ ] **T-1418** ⬜ Move per-provider default models and key names into `shared/` (duplicated in main and renderer) — _AI agent_
 - [ ] **T-1419** ⬜ `device:syncLabels` only re-reads Business status; no on-demand label fetch — _Devices agent_
 - [ ] **T-1420** ⬜ Renumber the two OpenAI-stub specs that collide with E4.24/E4.25 — _Coordinator_ · K12
-- [ ] **T-1421** ⬜ Refresh the code graph after the D89 wave (`graphify . --update`) — _Coordinator_ · D83
-- [ ] **T-1422** ⬜ Re-run `npm audit` after the D89 wave and re-triage — _Coordinator_ · K7
+- [ ] **T-1421** ⬜ Refresh the code graph after the D89 wave and Wave 3 (`graphify . --update`) — _Coordinator_ · D83
+- [ ] **T-1422** ⬜ Re-run `npm audit` after the D89 wave and Wave 3 (new: `read-excel-file`) and re-triage — _Coordinator_ · K7, D138
 - [ ] **T-1423** ⬜ Accessibility pass: roles, labels, keyboard navigation — _Design agent_ · D20
 - [ ] **T-1424** ⬜ Scheduled daily backups, optionally to a chosen folder — _Coordinator_
 - [ ] **T-1425** ⬜ Fuller diagnostics bundle: wa-service state, per-device errors, migration version — _Coordinator_
 - [ ] **T-1426** ⬜ Edit or reschedule a draft or scheduled campaign — _Campaigns agent_
 - [ ] **T-1427** ⚪ CI on Windows and a unit-test layer — _Coordinator_ · D81
+
+Found in Wave 3 (2026-10-03). The epic is the first word of each title.
+
+- [x] **T-1428** ✅ Campaigns: add `@@index([contactId])` to `CampaignRecipient` — the foreign key was indexed only behind `campaignId` (migration `20261003120000`) — _Coordinator_ · CLAUDE.md §5.3
+- [x] **T-1429** ✅ Packaging: the packaged self-test reads an `.xlsx` through the worker (`read-excel-file`) and loads the tray icon — done in code; a packaged run is T-1605 — _Coordinator_ · D137, D138, D143, D150 · K24
+- [ ] **T-1430** ⬜ Automation: live "chats in progress" count per flow — the count refreshes only when the list loads; there is no flow event — _Unassigned_ · D132
+- [ ] **T-1431** ⬜ Automation: drag steps on the flow canvas — layout is automatic today — _Unassigned_ · D131
+- [ ] **T-1432** ⬜ Automation: retry a welcome message parked by quiet hours or the cap — today it is dropped — _Unassigned_ · D133 · K23
+- [ ] **T-1433** ⬜ Automation: decide whether away messages go out during quiet hours — _Customer_ · D133 · K22, ROADMAP R4
+- [ ] **T-1434** ⬜ Inbox: give mock inject a file name and size, so E8.16 can assert the document bubble's name line — _Unassigned_
+- [ ] **T-1435** ⬜ Inbox: show incoming photos and videos by kind (today "Photo or video"); send a scheduled audio file as audio, not a document — _Unassigned_ · K27
+- [ ] **T-1436** ⬜ Audience: grabber per-phone preview counts ignore "chatted since" — _Unassigned_ · D140 · E8.56
+- [ ] **T-1437** ⬜ Audience: download a sample CSV, Excel and vCard file from the import dialog — _Unassigned_
+- [ ] **T-1438** ⬜ Settings: restore a backup from the Settings screen with the file picker — `system:restore` has no screen — _Unassigned_ · D73, D141
+- [ ] **T-1439** ⬜ Design: rebuild the remaining pages on the new primitives — today they follow the theme through tokens only — _Unassigned_ · D145
+- [ ] **T-1440** ⬜ Design: phone preview in the template, campaign and sequence composers — today only in Settings › Appearance — _Unassigned_ · D122
+- [ ] **T-1441** ⬜ Desktop: numeric unread badge on Windows (taskbar overlay) — today the button only flashes — _Unassigned_ · D142 · K26
+- [ ] **T-1442** ⬜ Release: verify on a real Windows and macOS machine — tray clicks, OS notifications and their click-through, start at login, Baileys tapped buttons and list replies, and LID chats showing real numbers — _Unassigned_, needs _Customer_ · D142, D143, D147 · K25, REQUIREMENTS §10
 
 ## 15. Blocked on the customer
 

@@ -12,14 +12,15 @@
 
 ## The short version
 
-| #   | What I need                                      | Where | If you skip it                                                |
-| --- | ------------------------------------------------ | ----- | ------------------------------------------------------------- |
-| 1   | **License server API** (URL + request/reply)     | §1    | Nobody but you can activate the app                           |
-| 2   | **Windows code-signing certificate**             | §4    | SmartScreen warns on install; most people will not click past |
-| 3   | **Apple Developer ID + a Mac to build on**       | §4    | No macOS build can be produced or opened                      |
-| 4   | **Branding** — icon, publisher name, support URL | §2    | A placeholder icon ships and the installer shows no publisher |
-| 5   | **Update feed URL**                              | §3    | No way to ship a fix after release                            |
-| 6   | **GitHub push access** for the Claude GitHub App | §8    | Finished work stays in the session and cannot reach `main`    |
+| #   | What I need                                        | Where | If you skip it                                                        |
+| --- | -------------------------------------------------- | ----- | --------------------------------------------------------------------- |
+| 1   | **License server API** (URL + request/reply)       | §1    | Nobody but you can activate the app                                   |
+| 2   | **Windows code-signing certificate**               | §4    | SmartScreen warns on install; most people will not click past         |
+| 3   | **Apple Developer ID + a Mac to build on**         | §4    | No macOS build can be produced or opened                              |
+| 4   | **Branding** — icon, publisher name, support URL   | §2    | A placeholder icon ships and the installer shows no publisher         |
+| 5   | **Update feed URL**                                | §3    | No way to ship a fix after release                                    |
+| 6   | **GitHub push access** for the Claude GitHub App   | §8    | Finished work stays in the session and cannot reach `main`            |
+| 7   | **A 15-minute check on a real Windows PC and Mac** | §10   | Tray, notifications and tapped buttons ship tested only in simulation |
 
 **You can run and test everything today without any of these.** `npm run dev:mock` starts the
 app against a mock license server and a fake WhatsApp transport — activate with
@@ -289,6 +290,28 @@ TODO
 | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | **Team inbox:** several staff sharing one inbox on different computers. Not planned — the app is one user per install. Confirm? | ⬜ Confirmed, not needed ⬜ Needed: `___` |
 | Anything in [docs/ROADMAP.md](./docs/ROADMAP.md) "Candidates, not yet decided" you want next?                                   | `___`                                     |
+
+---
+
+## Section 10 — Real-device checks ⬜
+
+Some Wave 3 features talk to the operating system or to a real phone, which the automated
+tests can only simulate (tracker K25). Please try each on a **Windows PC and a Mac** with one
+linked test number — not a number you depend on — and tick what works.
+
+| Check                                                                                              | Windows | macOS |
+| -------------------------------------------------------------------------------------------------- | ------- | ----- |
+| Closing the window keeps RapBooster in the tray (menu bar on a Mac); the tray menu opens it        | ⬜      | ⬜    |
+| The tray menu shows connected devices and running campaigns; "Pause all campaigns" works           | ⬜      | ⬜    |
+| A message from another phone shows a desktop notification; clicking it opens that chat             | ⬜      | ⬜    |
+| Unread messages show on the Dock icon (Mac) or flash the taskbar button (Windows)                  | ⬜      | ⬜    |
+| "Start with the computer" starts RapBooster quietly in the tray after a restart                    | ⬜      | ⬜    |
+| On the phone, tapping a chatbot menu button or list item moves the flow to the next step           | ⬜      | ⬜    |
+| Inbox chats show real phone numbers, or "Number hidden by WhatsApp" — never unfamiliar long digits | ⬜      | ⬜    |
+| Anything that looked wrong                                                                         | `___`   | `___` |
+
+This needs an installed build on each machine, so on a Mac it follows §4 (an unsigned Mac
+app will not open).
 
 ---
 

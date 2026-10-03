@@ -4,13 +4,15 @@ An Electron + Next.js desktop application for WhatsApp marketing, built on
 [Baileys](https://github.com/WhiskeySockets/Baileys), with a local SQLite database created per
 user in the OS application-data directory.
 
-> **Status (2026-10-03): feature-complete for the marketing suite, not yet shippable.**
-> 214 of 219 E2E tests pass on the merged tree (two since fixed, two need an OS keyring, one
-> is a measurement-only skip). Wave 3 — design system, help and tours, inbox and automation
-> additions — is in progress. What is missing for a release is input only the customer can
-> give: the license server API, code-signing certificates (Windows, and an Apple Developer ID
-> with a Mac to build on), branding and an update feed. See [REQUIREMENTS.md](./REQUIREMENTS.md),
-> [RELEASE.md](./RELEASE.md) and [SPRINT-TRACKER.md](./SPRINT-TRACKER.md).
+> **Status (2026-10-03): feature-complete through Wave 3, not yet shippable.** Wave 3 —
+> light and dark themes, inbox tools, chatbot flows, Excel/vCard import, a WhatsApp contacts
+> grabber and desktop notifications — is merged; the help system (setup wizard, tours, Help
+> Center) is in progress. Test numbers are in
+> [SPRINT-TRACKER.md §6](./SPRINT-TRACKER.md#6-test-results-history). What is missing for a
+> release is input only the customer can give: the license server API, code-signing
+> certificates (Windows, and an Apple Developer ID with a Mac to build on), branding and an
+> update feed. See [REQUIREMENTS.md](./REQUIREMENTS.md), [RELEASE.md](./RELEASE.md) and
+> [SPRINT-TRACKER.md](./SPRINT-TRACKER.md).
 >
 > **Windows and macOS** are both distribution targets (Apple Silicon and Intel). An unsigned
 > Windows installer triggers a SmartScreen warning; an unsigned Mac app will not open.
@@ -23,8 +25,10 @@ Twelve screens behind a license activation gate: **Dashboard** · **Inbox** · *
 
 - **Devices:** up to 20 WhatsApp accounts at once, by QR code or pairing code; warmup ramp for
   new numbers, automatic health pause, Business labels and catalog
-- **Contacts:** lists with custom fields, CSV and Google Sheets import at 50,000-row scale, tags,
-  an opt-out list with STOP/START replies, and a check for which numbers are on WhatsApp
+- **Contacts:** lists with custom fields; CSV, Excel (`.xlsx`), vCard (`.vcf`) and Google
+  Sheets import at 50,000-row scale; a WhatsApp grabber that copies the numbers your linked
+  phones know — address book and chats, including unsaved numbers — into a list; tags, an
+  opt-out list with STOP/START replies, and a check for which numbers are on WhatsApp
 - **Templates:** text, media, buttons, lists, polls, locations, contact cards, voice notes,
   stickers, events and products, with `{{Name}}` merge tags and `{Hi|Hello}` spintax
 - **Campaigns:** lists and tag audiences, random delays, daily caps, quiet hours, scheduling,
@@ -33,13 +37,19 @@ Twelve screens behind a license activation gate: **Dashboard** · **Inbox** · *
 - **Groups:** bulk messaging and creation, invite links, member management, a member grabber,
   and communities
 - **Status & Channels:** status updates and WhatsApp Channel posts, now or scheduled
-- **Automation:** keyword auto-replies, signed webhooks, call auto-reject
+- **Automation:** visual chatbot flows (menus, questions, hand-off to a person) with a test
+  panel, welcome and away messages, keyword auto-replies, signed webhooks, call auto-reject
 - **AI Bot:** OpenAI, Anthropic, Gemini or any OpenAI-compatible service, with daily caps,
   approval drafts and hand-off to a person
-- **Inbox:** one inbox across every number, with rich attachments
+- **Inbox:** one inbox across every number, with rich attachments, quick replies (type `/`),
+  a contact panel with private notes and campaign history, and messages scheduled for later
+- **Desktop:** notifications for new messages, a tray icon with live counts, keeps sending in
+  the background when the window is closed, optional start at login
+- **Look:** light and dark themes that follow Windows or macOS, and a WhatsApp-style phone
+  preview; every file is chosen with a normal file dialog
 
-Every send — campaign, sequence, group, AI or a person in the inbox — goes through one pacing
-engine, so the safety limits always hold.
+Every send — campaign, sequence, group, flow, welcome or away, scheduled message, AI or a
+person in the inbox — goes through one pacing engine, so the safety limits always hold.
 
 ## Requirements
 
@@ -132,7 +142,7 @@ clean database and an unactivated app.
 | `npm run build`      | Production bundles for main, preload, wa-service and the renderer                   |
 | `npm run pack`       | Unpacked build in `dist/`, no installer                                             |
 | `npm run dist`       | Installer for the current platform in `dist/` (NSIS on Windows, dmg + zip on macOS) |
-| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (219 tests)                  |
+| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (301 tests)                  |
 | `npm run test:smoke` | Packages the app and runs its self-test — catches asar/native issues                |
 | `npm run db:studio`  | Browse the local database                                                           |
 
@@ -174,17 +184,18 @@ Reproduce with `npm run pack && node scripts/perf.mjs`, and
 
 ## Documents
 
-| Document                                 | What it is                                                       |
-| ---------------------------------------- | ---------------------------------------------------------------- |
-| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) | **Start here:** status dashboard, known issues, test history     |
-| [docs/TASKS.md](./docs/TASKS.md)         | Every task, done and remaining, as checkboxes                    |
-| [docs/DECISIONS.md](./docs/DECISIONS.md) | Every decision with its reasoning                                |
-| [docs/ROADMAP.md](./docs/ROADMAP.md)     | What comes next                                                  |
-| [REQUIREMENTS.md](./REQUIREMENTS.md)     | **Open questions only** — what still blocks shipping             |
-| [RELEASE.md](./RELEASE.md)               | How to build, sign and publish a Windows or macOS update         |
-| [SPRINTS.md](./SPRINTS.md)               | Full specification: screens, schema, IPC contract, E2E test IDs  |
-| [CLAUDE.md](./CLAUDE.md)                 | Engineering rules for every coding session                       |
-| `design/`                                | Original HTML prototypes — the feature reference, never imported |
+| Document                                         | What it is                                                       |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md)         | **Start here:** status dashboard, known issues, test history     |
+| [docs/TASKS.md](./docs/TASKS.md)                 | Every task, done and remaining, as checkboxes                    |
+| [docs/DECISIONS.md](./docs/DECISIONS.md)         | Every decision with its reasoning                                |
+| [docs/ROADMAP.md](./docs/ROADMAP.md)             | What comes next                                                  |
+| [REQUIREMENTS.md](./REQUIREMENTS.md)             | **Open questions only** — what still blocks shipping             |
+| [RELEASE.md](./RELEASE.md)                       | How to build, sign and publish a Windows or macOS update         |
+| [SPRINTS.md](./SPRINTS.md)                       | Full specification: screens, schema, IPC contract, E2E test IDs  |
+| [docs/DESIGN-SYSTEM.md](./docs/DESIGN-SYSTEM.md) | Themes, tokens and components for building a screen              |
+| [CLAUDE.md](./CLAUDE.md)                         | Engineering rules for every coding session                       |
+| `design/`                                        | Original HTML prototypes — the feature reference, never imported |
 
 ## Known limitations
 
@@ -196,5 +207,10 @@ Reproduce with `npm run pack && node scripts/perf.mjs`, and
   returns a confidence score. The keyword, message-count and time triggers all work.
 - **A message in flight during a crash may send twice**, bounded at one per device per crash.
   WhatsApp offers no deduplication primitive that would remove this.
+- **Quiet hours apply to every automated reply.** A scheduled message waits for them to end;
+  a flow step, welcome or away message that falls inside them is not sent (a flow carries on
+  at the customer's next message). With the defaults no away message goes out 21:00–09:00.
+- **WhatsApp sometimes hides a contact's number.** Such chats show "Number hidden by
+  WhatsApp" until WhatsApp reveals the number, and are then moved onto it automatically.
 
 Full list, with reasoning, in [SPRINT-TRACKER.md §5](./SPRINT-TRACKER.md#5-known-issues).
