@@ -217,7 +217,7 @@ export default function InboxPage() {
                     </span>
                     {chat.unreadCount > 0 && (
                       <span
-                        className="shrink-0 rounded-full bg-primary px-1.5 text-xs text-white"
+                        className="shrink-0 rounded-full bg-primary px-1.5 text-xs text-on-primary"
                         data-testid="unread-badge"
                       >
                         {chat.unreadCount}
@@ -323,7 +323,7 @@ export default function InboxPage() {
                       )}
                     >
                       {m.type === 'media' && (
-                        <div className="mb-1 rounded bg-black/5 px-2 py-4 text-center text-xs text-ink-muted">
+                        <div className="mb-1 rounded bg-ink/5 px-2 py-4 text-center text-xs text-ink-muted">
                           [MEDIA]
                         </div>
                       )}
@@ -339,7 +339,7 @@ export default function InboxPage() {
                             <span
                               key={`${b.type}-${b.label}-${i}`}
                               data-testid="message-button"
-                              className="rounded-control border border-black/10 bg-surface px-2 py-1 text-center text-xs text-primary"
+                              className="rounded-control border border-ink/10 bg-surface px-2 py-1 text-center text-xs text-primary"
                             >
                               {b.label}
                             </span>

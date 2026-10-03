@@ -194,7 +194,7 @@ export function ImportDialog({
             className={cn(
               'rounded-control px-3 py-1 text-xs',
               source === value
-                ? 'bg-primary font-medium text-white'
+                ? 'bg-primary font-medium text-on-primary'
                 : 'border border-line text-ink-muted hover:bg-wa-in',
             )}
           >

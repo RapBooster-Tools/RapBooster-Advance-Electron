@@ -296,7 +296,7 @@ export default function TemplatesPage() {
 
               <div className="rounded-bubble bg-wa-out px-3 py-2 text-sm whitespace-pre-wrap text-ink">
                 {template.type === 'media' && (
-                  <div className="mb-1 rounded bg-black/5 px-2 py-4 text-center text-xs text-ink-muted">
+                  <div className="mb-1 rounded bg-ink/5 px-2 py-4 text-center text-xs text-ink-muted">
                     [{(template.mediaType ?? 'image').toUpperCase()}]
                   </div>
                 )}
@@ -310,7 +310,7 @@ export default function TemplatesPage() {
                     {template.buttons.map((b, i) => (
                       <span
                         key={`${b.type}-${b.label}-${i}`}
-                        className="flex items-center justify-between gap-2 rounded border border-black/10 px-2 py-1 text-xs"
+                        className="flex items-center justify-between gap-2 rounded border border-ink/10 px-2 py-1 text-xs"
                       >
                         <span className="truncate">{b.label}</span>
                         <span className="shrink-0 text-ink-subtle">
@@ -324,7 +324,7 @@ export default function TemplatesPage() {
                   template.options &&
                   template.options.length > 0 && (
                     <div className="mt-2 flex flex-col gap-1">
-                      <span className="rounded border border-black/10 px-2 py-1 text-center text-xs">
+                      <span className="rounded border border-ink/10 px-2 py-1 text-center text-xs">
                         {template.listButtonText ?? 'View options'}
                       </span>
                       {template.options.map((option, i) => (

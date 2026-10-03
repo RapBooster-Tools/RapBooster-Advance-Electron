@@ -169,7 +169,7 @@ export default function ActivationPage() {
       </div>
 
       {conflict && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/30 p-6">
+        <div className="fixed inset-0 flex items-center justify-center bg-overlay p-6">
           <div
             role="dialog"
             aria-modal="true"

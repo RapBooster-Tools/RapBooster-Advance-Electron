@@ -130,7 +130,7 @@ export function AnalyticsChart({ days }: { days: Day[] }) {
                 x2={W - PAD.right}
                 y1={y(t)}
                 y2={y(t)}
-                stroke="#e5e7eb"
+                className="stroke-line"
                 strokeWidth={1}
               />
               <text
@@ -139,7 +139,7 @@ export function AnalyticsChart({ days }: { days: Day[] }) {
                 textAnchor="end"
                 dominantBaseline="middle"
                 fontSize={11}
-                fill="#999999"
+                className="fill-ink-subtle"
               >
                 {Math.round(t)}
               </text>
@@ -186,7 +186,7 @@ export function AnalyticsChart({ days }: { days: Day[] }) {
                   y={H - 8}
                   textAnchor="middle"
                   fontSize={11}
-                  fill="#666666"
+                  className="fill-ink-muted"
                 >
                   {dayLabel(d.date)}
                 </text>
@@ -199,7 +199,7 @@ export function AnalyticsChart({ days }: { days: Day[] }) {
               y={PAD.top + PLOT_H / 2}
               textAnchor="middle"
               fontSize={12}
-              fill="#999999"
+              className="fill-ink-subtle"
             >
               No campaign messages in the last 7 days
             </text>

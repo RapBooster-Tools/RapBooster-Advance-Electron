@@ -1,19 +1,24 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import type { CampaignStatus, DeviceStatus } from '@shared/types'
 
 /**
- * Status colours come straight from the prototype (SPRINTS.md §7): green for
- * healthy, amber for paused, grey for idle, red for terminal failure.
+ * Status colours from the prototype (SPRINTS.md §7): green for healthy, amber
+ * for paused, grey for idle, red for terminal failure, blue for informational.
+ * Colour is never the only signal — the pill always carries a word, and the
+ * dot is decorative.
  */
-type Tone = 'ok' | 'warn' | 'idle' | 'danger'
+export type StatusTone = 'ok' | 'warn' | 'idle' | 'danger' | 'info'
+type Tone = StatusTone
 
 const TONES: Record<Tone, string> = {
   ok: 'bg-status-ok-bg text-status-ok-fg',
   warn: 'bg-status-warn-bg text-status-warn-fg',
   idle: 'bg-status-idle-bg text-status-idle-fg',
-  danger: 'bg-danger/10 text-danger',
+  danger: 'bg-danger/12 text-danger',
+  info: 'bg-status-info-bg text-status-info-fg',
 }
 
 const DEVICE_TONES: Record<DeviceStatus, Tone> = {
@@ -48,17 +53,24 @@ const CAMPAIGN_TONES: Record<CampaignStatus, Tone> = {
 export function StatusPill({
   tone,
   children,
+  dot = true,
+  testId,
 }: {
   tone: Tone
-  children: React.ReactNode
+  children: ReactNode
+  /** A leading dot helps scanning a column of pills; off for dense chips. */
+  dot?: boolean
+  testId?: string
 }) {
   return (
     <span
+      data-testid={testId}
       className={cn(
-        'inline-flex items-center rounded px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap',
         TONES[tone],
       )}
     >
+      {dot && <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden />}
       {children}
     </span>
   )

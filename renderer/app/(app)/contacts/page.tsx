@@ -80,7 +80,7 @@ export default function ContactsPage() {
             className={cn(
               'rounded-control px-3 py-1 text-xs',
               view === value
-                ? 'bg-ink font-medium text-white'
+                ? 'bg-ink font-medium text-surface'
                 : 'border border-line text-ink-muted hover:bg-wa-in',
             )}
           >
@@ -116,7 +116,7 @@ export default function ContactsPage() {
                 className={cn(
                   'rounded-t-control px-3 py-1.5 text-sm',
                   list.id === active?.id
-                    ? 'bg-primary font-medium text-white'
+                    ? 'bg-primary font-medium text-on-primary'
                     : 'text-ink-muted hover:bg-wa-in hover:text-ink',
                 )}
               >

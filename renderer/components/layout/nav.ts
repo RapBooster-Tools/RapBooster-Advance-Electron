@@ -31,100 +31,70 @@ export interface NavItem {
   testId: string
 }
 
+export interface NavGroup {
+  id: string
+  label: string
+  items: NavItem[]
+}
+
+const item = (
+  href: Route,
+  segment: string | null,
+  label: string,
+  icon: LucideIcon,
+  testId: string,
+): NavItem => ({ href, segment, label, icon, testId })
+
 /**
- * Sidebar order is taken from the prototype (SPRINTS.md §2), with Lucide icons
- * replacing its emoji, plus the D89 screens (Sequences, Status & Channels,
- * Automation) placed beside the features they extend. Settings is pinned to the
- * bottom.
+ * Sidebar sections, grouped by what the user is trying to do rather than by
+ * feature name, so a first-time user finds "send a campaign" or "add contacts"
+ * without knowing the product's vocabulary. Every route from the prototype
+ * (SPRINTS.md §2) plus the D89 screens appears exactly once; the `nav-*` test
+ * ids are a contract with the E2E suite.
  */
-export const PRIMARY_NAV: NavItem[] = [
+export const NAV_GROUPS: NavGroup[] = [
   {
-    href: '/',
-    segment: null,
-    label: 'Dashboard',
-    icon: LayoutDashboard,
-    testId: 'nav-dashboard',
+    id: 'overview',
+    label: 'Overview',
+    items: [
+      item('/', null, 'Dashboard', LayoutDashboard, 'nav-dashboard'),
+      item('/inbox', 'inbox', 'Inbox', MessageSquare, 'nav-inbox'),
+    ],
   },
   {
-    href: '/inbox',
-    segment: 'inbox',
-    label: 'Inbox',
-    icon: MessageSquare,
-    testId: 'nav-inbox',
+    id: 'messaging',
+    label: 'Messaging',
+    items: [
+      item('/campaigns', 'campaigns', 'Campaigns', Megaphone, 'nav-campaigns'),
+      item('/sequences', 'sequences', 'Sequences', ListOrdered, 'nav-sequences'),
+      item('/broadcast', 'broadcast', 'Status & Channels', Radio, 'nav-broadcast'),
+      item('/templates', 'templates', 'Templates', FileText, 'nav-templates'),
+    ],
   },
   {
-    href: '/campaigns',
-    segment: 'campaigns',
-    label: 'Campaigns',
-    icon: Megaphone,
-    testId: 'nav-campaigns',
+    id: 'audience',
+    label: 'Audience',
+    items: [
+      item('/contacts', 'contacts', 'Contacts', Contact, 'nav-contacts'),
+      item('/groups', 'groups', 'WA Groups', Users, 'nav-groups'),
+    ],
   },
   {
-    href: '/sequences',
-    segment: 'sequences',
-    label: 'Sequences',
-    icon: ListOrdered,
-    testId: 'nav-sequences',
-  },
-  {
-    href: '/broadcast',
-    segment: 'broadcast',
-    label: 'Status & Channels',
-    icon: Radio,
-    testId: 'nav-broadcast',
-  },
-  {
-    href: '/groups',
-    segment: 'groups',
-    label: 'WA Groups',
-    icon: Users,
-    testId: 'nav-groups',
-  },
-  {
-    href: '/devices',
-    segment: 'devices',
-    label: 'Devices',
-    icon: Smartphone,
-    testId: 'nav-devices',
-  },
-  {
-    href: '/contacts',
-    segment: 'contacts',
-    label: 'Contacts',
-    icon: Contact,
-    testId: 'nav-contacts',
-  },
-  {
-    href: '/templates',
-    segment: 'templates',
-    label: 'Templates',
-    icon: FileText,
-    testId: 'nav-templates',
-  },
-  {
-    href: '/automation',
-    segment: 'automation',
+    id: 'automation',
     label: 'Automation',
-    icon: Zap,
-    testId: 'nav-automation',
+    items: [
+      item('/automation', 'automation', 'Automation', Zap, 'nav-automation'),
+      item('/chatbot', 'chatbot', 'AI Bot', Bot, 'nav-chatbot'),
+    ],
   },
   {
-    href: '/chatbot',
-    segment: 'chatbot',
-    label: 'AI Bot',
-    icon: Bot,
-    testId: 'nav-chatbot',
+    id: 'setup',
+    label: 'Setup',
+    items: [
+      item('/devices', 'devices', 'Devices', Smartphone, 'nav-devices'),
+      item('/settings', 'settings', 'Settings', Settings, 'nav-settings'),
+    ],
   },
 ]
 
-export const FOOTER_NAV: NavItem[] = [
-  {
-    href: '/settings',
-    segment: 'settings',
-    label: 'Settings',
-    icon: Settings,
-    testId: 'nav-settings',
-  },
-]
-
-export const ALL_NAV = [...PRIMARY_NAV, ...FOOTER_NAV]
+export const ALL_NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items)

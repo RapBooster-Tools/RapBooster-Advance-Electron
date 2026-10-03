@@ -167,7 +167,7 @@ export function EnrollmentsDialog({
             className={cn(
               'rounded-control px-2.5 py-1 text-xs',
               filter === f.value
-                ? 'bg-primary text-white'
+                ? 'bg-primary text-on-primary'
                 : 'border border-line text-ink hover:bg-wa-in',
             )}
           >

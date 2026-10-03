@@ -1,80 +1,371 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens — SPRINTS.md §7.
- * Values derive from the prototype palette in design/, modernized: the
- * prototype is a low-fidelity Windows wireframe and the customer confirmed it
- * is a rough guide, not a pixel target.
+ * RapBooster design tokens — docs/DESIGN-SYSTEM.md is the reference.
+ *
+ * WHY every colour is a CSS variable consumed through Tailwind's `@theme`:
+ * utilities compile to `var(--color-…)`, so the dark theme is nothing more than
+ * a second set of values under `[data-theme='dark']`. No screen needs a `dark:`
+ * class to follow the theme — it only has to use tokens, never raw colours.
+ *
+ * The light values below are the defaults; the dark block further down
+ * redefines the same names. Token NAMES are a contract with every screen —
+ * add new ones freely, never rename or remove one.
+ *
+ * Contrast: every text/background pairing listed in DESIGN-SYSTEM.md §3 was
+ * checked at WCAG AA (4.5:1 for text) in both themes.
  */
 @theme {
-  --color-primary: #0078d4;
-  --color-primary-hover: #106ebe;
-  --color-danger: #c50f1f;
-  --color-danger-hover: #a4081f;
-  --color-success: #107c10;
+  /* Brand — a WhatsApp-adjacent green, deep enough for white text at AA. */
+  --color-primary: #007561;
+  --color-primary-hover: #00604f;
+  --color-on-primary: #ffffff;
+  --color-danger: #c42b1c;
+  --color-danger-hover: #a32317;
+  --color-on-danger: #ffffff;
+  --color-success: #15803d;
+  --color-info: #0b6bcb;
 
-  /* WhatsApp conversation surfaces */
-  --color-wa-out: #dcf8c6;
-  --color-wa-in: #f0f0f0;
-  --color-wa-teal: #128c7e;
+  /* WhatsApp conversation surfaces (inbox bubbles, hover tint). */
+  --color-wa-out: #d9fdd3;
+  --color-wa-in: #eef1f4;
+  --color-wa-teal: #008069;
 
   /* Status pills */
-  --color-status-ok-bg: #d4edda;
-  --color-status-ok-fg: #155724;
-  --color-status-warn-bg: #fff3cd;
-  --color-status-warn-fg: #856404;
-  --color-status-idle-bg: #e2e3e5;
-  --color-status-idle-fg: #383d41;
-  --color-selected: #28a745;
+  --color-status-ok-bg: #dcf5e7;
+  --color-status-ok-fg: #14532d;
+  --color-status-warn-bg: #fef3c7;
+  --color-status-warn-fg: #854d0e;
+  --color-status-idle-bg: #edf0f3;
+  --color-status-idle-fg: #3b4752;
+  --color-status-info-bg: #e0efff;
+  --color-status-info-fg: #0b4f96;
+  --color-selected: #1f9d55;
 
-  /* Surfaces */
-  --color-app-bg: #f5f5f5;
+  /* Surfaces, from back to front. */
+  --color-app-bg: #f3f5f7;
   --color-surface: #ffffff;
-  --color-sidebar: #f9f9f9;
-  --color-line: #e5e7eb;
+  --color-surface-muted: #f7f9fa;
+  --color-surface-raised: #ffffff;
+  --color-sidebar: #f8fafb;
+  --color-line: #e2e7eb;
+  --color-line-strong: #c9d2d9;
+  --color-overlay: rgb(11 20 26 / 0.45);
 
   /* Text */
-  --color-ink: #333333;
-  --color-ink-muted: #666666;
-  --color-ink-subtle: #999999;
+  --color-ink: #111b21;
+  --color-ink-muted: #4f5e68;
+  --color-ink-subtle: #5f6e78;
 
-  --radius-control: 6px;
-  --radius-card: 8px;
+  /* Keyboard focus. 3:1 against every surface, both themes. */
+  --color-focus: #007561;
+
+  /*
+   * WhatsApp's own palette, used only by the phone preview so a message looks
+   * the way the recipient will see it. Redefined for WhatsApp's dark mode below.
+   */
+  --color-wa-chat: #efeae2;
+  --color-wa-header: #008069;
+  --color-wa-on-header: #ffffff;
+  --color-wa-bubble-in: #ffffff;
+  --color-wa-bubble-out: #d9fdd3;
+  --color-wa-text: #111b21;
+  --color-wa-meta: #667781;
+  --color-wa-meta-out: #56685e;
+  --color-wa-link: #027eb5;
+  --color-wa-tick: #53bdeb;
+  --color-wa-divider: rgb(11 20 26 / 0.12);
+  --color-wa-media: #d1d7db;
+  --color-wa-composer: #f0f2f5;
+  --color-wa-input: #ffffff;
+
+  --radius-control: 8px;
+  --radius-card: 14px;
   --radius-bubble: 12px;
+  --radius-dialog: 18px;
 
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /*
+   * Elevation. WHY indirect: Tailwind inlines a literal shadow into each
+   * utility at build time, so a dark-mode override of `--shadow-*` would never
+   * reach the page. Pointing at `--elevation-*` keeps the value runtime-themable.
+   */
+  --shadow-card: var(--elevation-1);
+  --shadow-raised: var(--elevation-2);
+  --shadow-overlay: var(--elevation-3);
+
+  --font-sans:
+    Inter, 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont,
+    Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --ease-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --animate-fade-in: rb-fade-in 160ms var(--ease-soft) both;
+  --animate-fade-out: rb-fade-out 140ms ease-in both;
+  --animate-scale-in: rb-scale-in 180ms var(--ease-soft) both;
+  --animate-scale-out: rb-scale-out 140ms ease-in both;
+  --animate-slide-up: rb-slide-up 200ms var(--ease-soft) both;
+  --animate-shimmer: rb-shimmer 1.4s ease-in-out infinite;
+
+  @keyframes rb-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes rb-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes rb-scale-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.97);
+    }
+  }
+  @keyframes rb-scale-out {
+    to {
+      opacity: 0;
+      transform: translateY(4px) scale(0.98);
+    }
+  }
+  @keyframes rb-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+  @keyframes rb-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
 }
 
-html,
-body,
-#__next {
-  height: 100%;
+/* `dark:` and `collapsed:` variants for the rare case a token is not enough. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@custom-variant collapsed (&:where([data-sidebar='collapsed'], [data-sidebar='collapsed'] *));
+
+:root {
+  color-scheme: light;
+  --elevation-1: 0 1px 2px rgb(16 24 32 / 0.04), 0 2px 8px rgb(16 24 32 / 0.05);
+  --elevation-2: 0 2px 4px rgb(16 24 32 / 0.05), 0 8px 24px -4px rgb(16 24 32 / 0.12);
+  --elevation-3:
+    0 8px 16px -8px rgb(16 24 32 / 0.16), 0 24px 56px -12px rgb(16 24 32 / 0.28);
+  --gradient-accent: linear-gradient(135deg, #00a884 0%, #00897b 45%, #1d7fd8 100%);
+  --gradient-glow: radial-gradient(
+    120% 80% at 0% 0%,
+    rgb(0 168 132 / 0.1) 0%,
+    rgb(29 127 216 / 0.06) 45%,
+    transparent 75%
+  );
 }
 
-body {
-  background: var(--color-app-bg);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  /* Desktop chrome, not a web page: no rubber-banding, no text selection on
-     shell surfaces, no native drag of UI images. */
-  overscroll-behavior: none;
-  -webkit-user-select: none;
-  user-select: none;
+/*
+ * Dark theme. Applied by the bootstrap script in app/layout.tsx before first
+ * paint, from the saved choice or — on "System" — from prefers-color-scheme.
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-primary: #00a884;
+  --color-primary-hover: #06cf9c;
+  --color-on-primary: #0b141a;
+  --color-danger: #f15c6d;
+  --color-danger-hover: #f47c89;
+  --color-on-danger: #0b141a;
+  --color-success: #3fcf8e;
+  --color-info: #53a8f5;
+
+  --color-wa-out: #005c4b;
+  --color-wa-in: #202c33;
+  --color-wa-teal: #00a884;
+
+  --color-status-ok-bg: #103529;
+  --color-status-ok-fg: #7ee2b8;
+  --color-status-warn-bg: #3b2f0b;
+  --color-status-warn-fg: #f7d26b;
+  --color-status-idle-bg: #233138;
+  --color-status-idle-fg: #c5d0d6;
+  --color-status-info-bg: #0f2a44;
+  --color-status-info-fg: #9ccbf7;
+  --color-selected: #00a884;
+
+  --color-app-bg: #0b141a;
+  --color-surface: #111b21;
+  --color-surface-muted: #0e181e;
+  --color-surface-raised: #1a252c;
+  --color-sidebar: #0e171d;
+  --color-line: #24323b;
+  --color-line-strong: #34444e;
+  --color-overlay: rgb(0 0 0 / 0.6);
+
+  --color-ink: #e9edef;
+  --color-ink-muted: #aebac1;
+  --color-ink-subtle: #8696a0;
+
+  --color-focus: #2fd3a8;
+
+  --color-wa-chat: #0b141a;
+  --color-wa-header: #202c33;
+  --color-wa-on-header: #e9edef;
+  --color-wa-bubble-in: #202c33;
+  --color-wa-bubble-out: #005c4b;
+  --color-wa-text: #e9edef;
+  --color-wa-meta: #8696a0;
+  --color-wa-meta-out: #aecfc8;
+  --color-wa-link: #53bdeb;
+  --color-wa-divider: rgb(233 237 239 / 0.12);
+  --color-wa-media: #2a3942;
+  --color-wa-composer: #202c33;
+  --color-wa-input: #2a3942;
+
+  --elevation-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.02);
+  --elevation-2: 0 2px 6px rgb(0 0 0 / 0.45), 0 12px 28px -6px rgb(0 0 0 / 0.55);
+  --elevation-3: 0 12px 24px -8px rgb(0 0 0 / 0.6), 0 32px 64px -16px rgb(0 0 0 / 0.7);
+  --gradient-accent: linear-gradient(135deg, #00a884 0%, #04977b 45%, #2b8be0 100%);
+  --gradient-glow: radial-gradient(
+    120% 80% at 0% 0%,
+    rgb(0 168 132 / 0.12) 0%,
+    rgb(43 139 224 / 0.07) 45%,
+    transparent 75%
+  );
 }
 
-input,
-textarea,
-[contenteditable='true'] {
-  -webkit-user-select: text;
-  user-select: text;
+/*
+ * The phone preview can be pinned to WhatsApp's light palette inside a dark
+ * app (`theme="light"`), so the WhatsApp tokens are restated for that subtree.
+ */
+[data-theme='light'] {
+  color-scheme: light;
+  --color-wa-chat: #efeae2;
+  --color-wa-header: #008069;
+  --color-wa-on-header: #ffffff;
+  --color-wa-bubble-in: #ffffff;
+  --color-wa-bubble-out: #d9fdd3;
+  --color-wa-text: #111b21;
+  --color-wa-meta: #667781;
+  --color-wa-meta-out: #56685e;
+  --color-wa-link: #027eb5;
+  --color-wa-divider: rgb(11 20 26 / 0.12);
+  --color-wa-media: #d1d7db;
+  --color-wa-composer: #f0f2f5;
+  --color-wa-input: #ffffff;
 }
 
-/* The frameless title bar is the only draggable region. */
+@layer base {
+  html,
+  body,
+  #__next {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-app-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    /* Desktop chrome, not a web page: no rubber-banding, no text selection on
+       shell surfaces, no native drag of UI images. */
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /*
+   * Form controls follow the theme even on screens that style them with only a
+   * border. Utilities sit in a later layer, so any explicit class still wins.
+   */
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+  select,
+  textarea {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+  input:not(
+      [type='checkbox'],
+      [type='radio'],
+      [type='range'],
+      [type='color']
+    ):focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus) 28%, transparent);
+  }
+  ::placeholder {
+    color: var(--color-ink-subtle);
+    opacity: 1;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-primary);
+  }
+
+  /* Visible keyboard focus everywhere; mouse clicks do not trigger it. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 28%, transparent);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+}
+
+/* The title-bar header is draggable; everything inside it opts back out. */
 .app-drag {
   -webkit-app-region: drag;
 }
 .app-no-drag {
   -webkit-app-region: no-drag;
+}
+
+@layer components {
+  /* Shimmer for <Skeleton>; the gradient follows the theme through the tokens. */
+  .rb-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-wa-in) 0%,
+      color-mix(in oklab, var(--color-wa-in) 55%, var(--color-surface)) 50%,
+      var(--color-wa-in) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* Subtle dotted wallpaper behind the phone preview's chat, like WhatsApp's. */
+  .wa-wallpaper {
+    background-color: var(--color-wa-chat);
+    background-image: radial-gradient(
+      color-mix(in oklab, var(--color-wa-text) 7%, transparent) 1px,
+      transparent 1.2px
+    );
+    background-size: 14px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { PageHeader } from '@renderer/components/layout/page-header'
+import { AppearanceSection } from '@renderer/components/settings/appearance-section'
 import { SendingSafetySection } from '@renderer/components/settings/sending-safety-section'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -115,7 +116,10 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" description="License, data and diagnostics." />
+      <PageHeader
+        title="Settings"
+        description="License, appearance, data and diagnostics."
+      />
 
       <div className="flex flex-col gap-4 p-6">
         <Section title="License">
@@ -214,6 +218,8 @@ export default function SettingsPage() {
             Diagnostics contain no message content; phone numbers and keys are redacted.
           </p>
         </Section>
+
+        <AppearanceSection />
 
         <SendingSafetySection />
 
