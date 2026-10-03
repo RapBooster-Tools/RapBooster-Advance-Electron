@@ -9,19 +9,15 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { AppError } from '../../../shared/errors'
 import { renderTemplate } from '../../../shared/merge-tags'
-import { decodeButtons, validateButtons } from '../../../shared/template-buttons'
-import type { MediaType, TemplateButton, TemplateType } from '../../../shared/types'
-import {
-  richPayload,
-  richPayloadByType,
-  type RichPayload,
-} from '../../../shared/rich-message'
+import { spin } from '../../../shared/spintax'
+import { decodeButtons } from '../../../shared/template-buttons'
+import type { MediaType, TemplateType } from '../../../shared/types'
+import { richPayload, type RichPayload } from '../../../shared/rich-message'
 import { assertMediaAllowed } from '../services/media-policy'
+import { checkButtons, checkRich, FILE_TYPES } from '../services/template-rules'
 import { getPrisma } from '../db/client'
 import { mediaDir } from '../db/paths'
 import { registerHandler } from './router'
-
-/** WhatsApp's practical limits; larger files are rejected before they are copied. */
 
 function parseJsonArray(value: string | null): string[] | null {
   if (!value) return null
@@ -94,70 +90,6 @@ function storeMedia(
   const target = join(dir, basename(sourcePath))
   copyFileSync(sourcePath, target)
   return target
-}
-
-/** Types whose payload lives in `extra`, and the schema it must satisfy. */
-const PAYLOAD_TYPES = new Set(Object.keys(richPayloadByType))
-/** Types sent as a file with no text of their own. */
-const FILE_TYPES: Partial<Record<TemplateType, MediaType>> = {
-  voice: 'audio',
-  sticker: 'sticker',
-}
-
-/**
- * Per-type rules the zod contract cannot express on its own. Returns the
- * validated payload to store, or null for types that carry none.
- */
-function checkRich(
-  type: TemplateType,
-  content: string,
-  extra: RichPayload | undefined,
-  hasMedia: boolean,
-): RichPayload | null {
-  if (!FILE_TYPES[type] && content.trim() === '') {
-    throw new AppError('VALIDATION_FAILED', {
-      userMessage:
-        type === 'poll'
-          ? 'Write the poll question.'
-          : type === 'event'
-            ? 'Give the event a name.'
-            : 'Template content is required.',
-    })
-  }
-  if (FILE_TYPES[type] && !hasMedia) {
-    throw new AppError('VALIDATION_FAILED', {
-      userMessage:
-        type === 'voice'
-          ? 'Choose an audio file for the voice note.'
-          : 'Choose a .webp sticker.',
-    })
-  }
-  if (!PAYLOAD_TYPES.has(type)) return null
-  const schema = richPayloadByType[type as keyof typeof richPayloadByType]
-  const parsed = schema.safeParse(extra)
-  if (!parsed.success) {
-    throw new AppError('VALIDATION_FAILED', {
-      userMessage: parsed.error.issues[0]?.message ?? `Complete the ${type} details.`,
-    })
-  }
-  return parsed.data
-}
-
-function checkButtons(
-  buttons: TemplateButton[] | undefined,
-): TemplateButton[] | undefined {
-  if (!buttons) return undefined
-  const cleaned = buttons
-    .map((b) => ({
-      ...b,
-      label: b.label.trim(),
-      ...(b.value ? { value: b.value.trim() } : {}),
-    }))
-    .filter((b) => b.label !== '')
-
-  const problem = validateButtons(cleaned)
-  if (problem) throw new AppError('VALIDATION_FAILED', { userMessage: problem })
-  return cleaned
 }
 
 async function requireTemplate(id: string) {
@@ -332,7 +264,12 @@ export function registerTemplateHandlers(): void {
       }
     }
 
-    const { text, unresolved } = renderTemplate(template.content, values)
+    // One random variant, rendered the way a send renders it — spintax before
+    // merge tags (see personalise in template-message.ts). Unresolved tags come
+    // from the whole template so a tag in an option not picked this time is
+    // still reported.
+    const { text } = renderTemplate(spin(template.content), values)
+    const { unresolved } = renderTemplate(template.content, values)
     return { rendered: text, unresolvedTags: unresolved }
   })
 }

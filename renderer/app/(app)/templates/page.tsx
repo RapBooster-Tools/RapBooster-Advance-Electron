@@ -6,9 +6,20 @@ import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
+import {
+  draftToExtra,
+  emptyRichDraft,
+  FILE_TEMPLATE_TYPES,
+  TEXTLESS_TEMPLATE_TYPES,
+  type RichDraft,
+} from '@renderer/components/templates/rich-draft'
+import { RichSummary } from '@renderer/components/templates/rich-summary'
+import { RichTemplateFields } from '@renderer/components/templates/rich-template-fields'
+import { seededRng, SpintaxHint } from '@renderer/components/templates/spintax-hint'
 import { EmptyState } from '@renderer/components/ui/empty-state'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import { extractTags, renderTemplate } from '@shared/merge-tags'
+import { spin, spintaxVariants } from '@shared/spintax'
 import { validateButtons } from '@shared/template-buttons'
 import {
   MAX_LIST_ROWS,
@@ -30,6 +41,13 @@ const TYPE_LABEL: Record<TemplateType, string> = {
   poll: 'Poll',
   event: 'Event Invite',
   product: 'Catalog Product',
+}
+
+/** What the content box means for types where it is not just "the message". */
+const CONTENT_LABEL: Partial<Record<TemplateType, string>> = {
+  poll: 'Poll question',
+  event: 'Event name',
+  product: 'Message shown with the product',
 }
 
 /** Types that carry tappable UI, and so offer a footer (REQUIREMENTS §7.9). */
@@ -92,6 +110,8 @@ export default function TemplatesPage() {
   const [listButtonText, setListButtonText] = useState('')
   const [footer, setFooter] = useState('')
   const [buttons, setButtons] = useState<ButtonDraft[]>([])
+  const [rich, setRich] = useState<RichDraft>(emptyRichDraft)
+  const [previewSeed, setPreviewSeed] = useState(1)
   const [error, setError] = useState<string>()
 
   // Every field across all lists is a candidate merge tag.
@@ -109,7 +129,12 @@ export default function TemplatesPage() {
     return values
   }, [availableFields])
 
-  const preview = useMemo(() => renderTemplate(content, sample), [content, sample])
+  // Spintax first, then merge tags — the order a real send uses.
+  const preview = useMemo(
+    () => renderTemplate(spin(content, seededRng(previewSeed)), sample),
+    [content, sample, previewSeed],
+  )
+  const hasText = !TEXTLESS_TEMPLATE_TYPES.includes(type)
   const unknownTags = useMemo(
     () =>
       extractTags(content).filter(
@@ -127,6 +152,7 @@ export default function TemplatesPage() {
     setListButtonText('')
     setFooter('')
     setButtons([])
+    setRich(emptyRichDraft())
     setError(undefined)
   }
 
@@ -171,14 +197,26 @@ export default function TemplatesPage() {
       return
     }
 
+    const extra = draftToExtra(type, rich)
+    if (!extra.ok) {
+      setError(extra.error)
+      return
+    }
+
     const trimmedFooter = footer.trim()
     const trimmedListButton = listButtonText.trim()
 
     const result = await window.api.invoke('template:create', {
       name,
       type,
-      content,
+      // Voice notes, stickers, locations and contact cards carry no text;
+      // anything typed before switching type is not saved with them.
+      content: hasText ? content : '',
+      ...(extra.value ? { extra: extra.value } : {}),
       ...(type === 'media' ? { mediaType, mediaSourcePath: mediaPath.trim() } : {}),
+      ...(FILE_TEMPLATE_TYPES.includes(type)
+        ? { mediaSourcePath: mediaPath.trim() }
+        : {}),
       ...(type === 'interactive'
         ? {
             options: optionList,
@@ -262,6 +300,7 @@ export default function TemplatesPage() {
                     [{(template.mediaType ?? 'image').toUpperCase()}]
                   </div>
                 )}
+                <RichSummary template={template} />
                 {template.content}
                 {template.footer && (
                   <p className="mt-1 text-xs text-ink-subtle">{template.footer}</p>
@@ -377,35 +416,46 @@ export default function TemplatesPage() {
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="tpl-content" className="text-xs font-semibold text-ink">
-                Message Content
-              </label>
-              <textarea
-                id="tpl-content"
-                data-testid="tpl-content"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Type your message..."
-                className="min-h-24 resize-y rounded-control border border-line px-2.5 py-2 font-mono text-sm outline-none focus:border-primary"
-              />
-              {availableFields.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="text-xs text-ink-muted">Insert:</span>
-                  {availableFields.map((field) => (
-                    <button
-                      key={field}
-                      type="button"
-                      data-testid={`insert-${field}`}
-                      onClick={() => setContent((c) => `${c}{{${field}}}`)}
-                      className="rounded border border-line px-1.5 py-0.5 text-xs text-ink hover:bg-wa-in"
-                    >
-                      {`{{${field}}}`}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {hasText && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="tpl-content" className="text-xs font-semibold text-ink">
+                  {CONTENT_LABEL[type] ?? 'Message Content'}
+                </label>
+                <textarea
+                  id="tpl-content"
+                  data-testid="tpl-content"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Type your message..."
+                  className="min-h-24 resize-y rounded-control border border-line px-2.5 py-2 font-mono text-sm outline-none focus:border-primary"
+                />
+                <SpintaxHint content={content} />
+                {availableFields.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-xs text-ink-muted">Insert:</span>
+                    {availableFields.map((field) => (
+                      <button
+                        key={field}
+                        type="button"
+                        data-testid={`insert-${field}`}
+                        onClick={() => setContent((c) => `${c}{{${field}}}`)}
+                        className="rounded border border-line px-1.5 py-0.5 text-xs text-ink hover:bg-wa-in"
+                      >
+                        {`{{${field}}}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <RichTemplateFields
+              type={type}
+              draft={rich}
+              onChange={setRich}
+              filePath={mediaPath}
+              onFilePathChange={setMediaPath}
+            />
 
             {type === 'media' && (
               <>
@@ -592,23 +642,39 @@ export default function TemplatesPage() {
               </div>
             )}
 
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-semibold text-ink">Preview</span>
-              <div
-                className="rounded-bubble bg-wa-out px-3 py-2 text-sm whitespace-pre-wrap text-ink"
-                data-testid="tpl-preview"
-              >
-                {preview.text || (
-                  <span className="text-ink-subtle">(Type a message to preview it)</span>
+            {hasText && (
+              <div className="flex flex-col gap-1.5">
+                <span className="flex items-center justify-between text-xs font-semibold text-ink">
+                  Preview
+                  {spintaxVariants(content) > 1 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPreviewSeed((s) => s + 1)}
+                      data-testid="tpl-shuffle"
+                    >
+                      Another variation
+                    </Button>
+                  )}
+                </span>
+                <div
+                  className="rounded-bubble bg-wa-out px-3 py-2 text-sm whitespace-pre-wrap text-ink"
+                  data-testid="tpl-preview"
+                >
+                  {preview.text || (
+                    <span className="text-ink-subtle">
+                      (Type a message to preview it)
+                    </span>
+                  )}
+                </div>
+                {unknownTags.length > 0 && (
+                  <p className="text-xs text-status-warn-fg" data-testid="unknown-tags">
+                    No list provides: {unknownTags.map((t) => `{{${t}}}`).join(', ')}.
+                    These will send as blanks.
+                  </p>
                 )}
               </div>
-              {unknownTags.length > 0 && (
-                <p className="text-xs text-status-warn-fg" data-testid="unknown-tags">
-                  No list provides: {unknownTags.map((t) => `{{${t}}}`).join(', ')}. These
-                  will send as blanks.
-                </p>
-              )}
-            </div>
+            )}
 
             {error && (
               <p

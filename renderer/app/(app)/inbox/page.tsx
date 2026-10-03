@@ -3,6 +3,7 @@
 import { formatDistanceToNow } from 'date-fns'
 import { MessageSquare } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { RichComposer } from '@renderer/components/inbox/rich-composer'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -350,6 +351,20 @@ export default function InboxPage() {
                   >
                     😊
                   </Button>
+                  <RichComposer
+                    chatId={active.id}
+                    onSent={(sent) => {
+                      setThread((current) =>
+                        current.chatId === active.id
+                          ? {
+                              ...current,
+                              messages: [...current.messages, sent as Message],
+                            }
+                          : current,
+                      )
+                      chats.refetch()
+                    }}
+                  />
                   <input
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
