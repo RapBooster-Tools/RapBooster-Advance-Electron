@@ -61,7 +61,7 @@ export type EscalationResult = { ok: true } | { ok: false; message: string }
 export async function escalate(
   deviceId: string,
   chatId: string,
-  settings: BotSettings,
+  settings: Pick<BotSettings, 'escalationMessage'>,
 ): Promise<EscalationResult> {
   const at = new Date()
   await getPrisma().chat.update({

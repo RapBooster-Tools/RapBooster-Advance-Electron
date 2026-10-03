@@ -1,8 +1,11 @@
 /**
- * The one way an AI-authored message leaves the app: through wa-service, so the
- * throttle applies (CLAUDE.md §2.5), then stored, shown and acknowledged.
+ * The one way an automated reply leaves the app — the AI bot's, a chatbot
+ * flow's, a welcome message: through wa-service, so the throttle applies
+ * (CLAUDE.md §2.5), then stored, shown and acknowledged.
  */
 import type { IpcEventPayload } from '../../../../shared/ipc'
+import type { MessageType } from '../../../../shared/types'
+import type { WaOutgoing } from '../../../../shared/wa-protocol'
 import { getPrisma } from '../../db/client'
 import { waBridge } from '../../wa-bridge'
 import { notify } from '../notify'
@@ -27,44 +30,95 @@ export async function sendBotText(
   text: string,
   options: { manual?: boolean; at?: Date } = {},
 ): Promise<InboxMessage> {
+  return sendBotMessage(
+    deviceId,
+    chatId,
+    { kind: 'text', body: text },
+    { ...options, isAiReply: true },
+  )
+}
+
+/** The inbox's view of an outgoing message: its stored type, text and buttons. */
+function storedForm(message: WaOutgoing): {
+  type: MessageType
+  body: string
+  buttons: string | null
+} {
+  if (message.kind === 'buttons') {
+    return {
+      type: 'buttons',
+      body: message.body,
+      buttons: JSON.stringify(
+        message.buttons.map((b) => ({ type: b.type, label: b.label })),
+      ),
+    }
+  }
+  if (message.kind === 'list') {
+    // A list has no column of its own; its rows are kept readable in the body.
+    const rows = message.rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n')
+    return { type: 'interactive', body: `${message.body}\n\n${rows}`, buttons: null }
+  }
+  const body = 'body' in message && typeof message.body === 'string' ? message.body : ''
+  return { type: 'text', body, buttons: null }
+}
+
+/**
+ * The general form of `sendBotText`, for automation other than the AI: a
+ * chatbot flow's menu, a welcome or away message. Same path — throttled,
+ * stored, pushed to an open inbox, answered messages blue-ticked.
+ *
+ * NOTE: `isAiReply` defaults to false here. The "escalate after N bot replies"
+ * trigger counts AI answers, and a scripted menu step is not one.
+ */
+export async function sendBotMessage(
+  deviceId: string,
+  chatId: string,
+  outgoing: WaOutgoing,
+  options: { manual?: boolean; at?: Date; isAiReply?: boolean } = {},
+): Promise<InboxMessage> {
   const { messageId } = await waBridge.request('message:send', {
     deviceId,
     to: chatId,
-    message: { kind: 'text', body: text },
+    message: outgoing,
     ...(options.manual ? { manual: true } : {}),
   })
 
   const at = options.at ?? new Date()
+  const isAiReply = options.isAiReply ?? false
+  const stored = storedForm(outgoing)
   const prisma = getPrisma()
   const saved = await prisma.message.create({
     data: {
       id: messageId,
       chatId,
       direction: 'out',
-      type: 'text',
-      body: text,
+      type: stored.type,
+      body: stored.body,
+      buttons: stored.buttons,
       status: 'sent',
-      isAiReply: true,
+      isAiReply,
       timestamp: at,
     },
   })
   await prisma.chat.update({
     where: { id: chatId },
-    data: { lastMessage: text, lastMessageAt: at },
+    data: { lastMessage: stored.body, lastMessageAt: at },
   })
 
   const message: InboxMessage = {
     id: saved.id,
     chatId,
     direction: 'out',
-    type: 'text',
-    body: text,
+    type: stored.type,
+    body: stored.body,
     mediaPath: null,
     fileName: null,
     fileSize: null,
+    // The inbox renders buttons from chat:messages; the push only needs to
+    // show that a reply went out.
     buttons: null,
     status: 'sent',
-    isAiReply: true,
+    isAiReply,
     timestamp: at.toISOString(),
   }
   // Tracker K10: without this an open inbox never showed the bot's reply until
