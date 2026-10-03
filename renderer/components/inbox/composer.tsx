@@ -117,7 +117,7 @@ export function Composer({
   }, [])
 
   return (
-    <div className="border-t border-line p-3">
+    <div className="border-t border-line p-3" data-tour="inbox-composer">
       {emojiOpen && (
         <div className="mb-2 flex flex-wrap gap-1" data-testid="emoji-picker">
           {EMOJI.map((e) => (

@@ -137,7 +137,11 @@ function Inbox() {
       title="Unified inbox"
       description="Conversations from every connected device appear here."
       actions={
-        <Button onClick={openReplies} data-testid="quick-replies-open">
+        <Button
+          onClick={openReplies}
+          data-testid="quick-replies-open"
+          data-tour="inbox-quick-replies"
+        >
           Quick replies
         </Button>
       }
@@ -220,6 +224,7 @@ function Inbox() {
                     onClick={() => setPanelOpen((o) => !o)}
                     title="Show contact details and notes"
                     data-testid="contact-panel-toggle"
+                    data-tour="inbox-contact-info"
                   >
                     <PanelRight className="size-3.5" aria-hidden />
                     Contact info

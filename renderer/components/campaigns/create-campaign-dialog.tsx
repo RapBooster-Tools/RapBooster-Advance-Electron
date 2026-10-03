@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
@@ -197,22 +198,25 @@ export function CreateCampaignDialog({
 
         <CampaignAudienceTags tags={tags} value={audience} onChange={setAudience} />
 
-        <label className="flex items-start gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            data-testid="cmp-check-numbers"
-            checked={checkNumbers}
-            onChange={(e) => setCheckNumbers(e.target.checked)}
-          />
-          <span>
-            Skip numbers not on WhatsApp
-            <span className="block text-xs text-ink-muted">
-              Checks each number just before sending and skips the ones without an
-              account, instead of counting them as failures.
+        <div className="flex items-start gap-1">
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              data-testid="cmp-check-numbers"
+              checked={checkNumbers}
+              onChange={(e) => setCheckNumbers(e.target.checked)}
+            />
+            <span>
+              Skip numbers not on WhatsApp
+              <span className="block text-xs text-ink-muted">
+                Checks each number just before sending and skips the ones without an
+                account, instead of counting them as failures.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+          <FieldHelp id="campaign-check-numbers" />
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="cmp-template" className="text-xs font-semibold text-ink">
@@ -250,9 +254,12 @@ export function CreateCampaignDialog({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="cmp-schedule" className="text-xs font-semibold text-ink">
-            Schedule Send (optional)
-          </label>
+          <span className="flex items-center gap-1">
+            <label htmlFor="cmp-schedule" className="text-xs font-semibold text-ink">
+              Schedule Send (optional)
+            </label>
+            <FieldHelp id="campaign-schedule" />
+          </span>
           <input
             id="cmp-schedule"
             type="datetime-local"

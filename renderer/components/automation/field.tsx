@@ -10,18 +10,24 @@ export function Field({
   label,
   htmlFor,
   hint,
+  info,
   children,
 }: {
   label: string
   htmlFor?: string
   hint?: string
+  /** A "?" InfoTip beside the label, for settings that need more than a hint. */
+  info?: ReactNode
   children: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-xs font-semibold text-ink">
-        {label}
-      </label>
+      <span className="flex items-center gap-1">
+        <label htmlFor={htmlFor} className="text-xs font-semibold text-ink">
+          {label}
+        </label>
+        {info}
+      </span>
       {children}
       {hint && <p className="text-xs text-ink-muted">{hint}</p>}
     </div>

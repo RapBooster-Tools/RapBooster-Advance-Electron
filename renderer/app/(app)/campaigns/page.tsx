@@ -79,6 +79,7 @@ export default function CampaignsPage() {
             variant="primary"
             onClick={() => setCreating(true)}
             data-testid="new-campaign"
+            data-tour="campaigns-new"
           >
             + Create Campaign
           </Button>

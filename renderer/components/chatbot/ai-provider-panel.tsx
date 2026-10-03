@@ -3,6 +3,7 @@
 import { Check } from 'lucide-react'
 import { useState } from 'react'
 import { useToast } from '@renderer/components/providers/toast-provider'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import type { AiProvider } from '@shared/types'
 import { Field, INPUT, Panel } from './form'
@@ -90,9 +91,13 @@ export function AiProviderPanel({
   const hasKey = keys?.[config.provider] ?? false
 
   return (
-    <Panel title="AI Provider">
+    <Panel title="AI Provider" tour="ai-provider">
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Provider" htmlFor="ai-provider">
+        <Field
+          label="Provider"
+          htmlFor="ai-provider"
+          info={<FieldHelp id="ai-provider" />}
+        >
           <select
             id="ai-provider"
             data-testid="ai-provider"

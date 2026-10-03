@@ -45,6 +45,7 @@ export function CampaignCard({
   return (
     <div
       data-testid="campaign-card"
+      data-tour="campaign-card"
       data-campaign-id={campaign.id}
       className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4"
     >
@@ -106,7 +107,11 @@ export function CampaignCard({
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-xs" data-testid="campaign-counters">
+      <p
+        className="text-xs"
+        data-testid="campaign-counters"
+        data-tour="campaign-counters"
+      >
         <span className="text-success">✓ Sent: {campaign.sentCount}</span>
         {' | '}
         <span className="text-danger">✗ Failed: {campaign.failedCount}</span>
@@ -136,7 +141,7 @@ export function CampaignCard({
         ))}
       </dl>
 
-      <div className="mt-1 flex flex-wrap gap-2">
+      <div className="mt-1 flex flex-wrap gap-2" data-tour="campaign-actions">
         {campaign.status === 'running' ? (
           <>
             <Button

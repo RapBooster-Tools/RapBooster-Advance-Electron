@@ -5,6 +5,7 @@ import {
   Zap,
   Contact,
   FileText,
+  LifeBuoy,
   LayoutDashboard,
   MessageSquare,
   Megaphone,
@@ -93,6 +94,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       item('/devices', 'devices', 'Devices', Smartphone, 'nav-devices'),
       item('/settings', 'settings', 'Settings', Settings, 'nav-settings'),
+      item('/help', 'help', 'Help Center', LifeBuoy, 'nav-help'),
     ],
   },
 ]

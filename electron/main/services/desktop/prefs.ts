@@ -64,7 +64,29 @@ function decode(rows: { key: string; value: string }[]): AppPrefs {
       console.debug('desktop: unreadable toursSeen preference, using none', err)
     }
   }
-  return out
+  return onboardingTestSeam(out, stored)
+}
+
+/** `toursSeen` entry meaning "every tour": the renderer offers none. */
+export const ALL_TOURS_SEEN = '*'
+
+/**
+ * NOTE: test seam. Under E2E (NODE_ENV=test) the first-run welcome and the
+ * "take the tour" prompts would sit over every screen of ~300 specs that were
+ * written before they existed, so they report onboarding as done and every
+ * tour as seen — unless a spec opts in with RB_ONBOARDING=1. Only the
+ * defaults are replaced: a value a spec stored itself is reported as stored.
+ * Never active in a real install, where NODE_ENV is not "test".
+ */
+function onboardingTestSeam(prefs: AppPrefs, stored: Map<string, string>): AppPrefs {
+  if (process.env.NODE_ENV !== 'test' || process.env.RB_ONBOARDING === '1') return prefs
+  return {
+    ...prefs,
+    onboardingCompleted: stored.has('onboardingCompleted')
+      ? prefs.onboardingCompleted
+      : true,
+    toursSeen: stored.has('toursSeen') ? prefs.toursSeen : [ALL_TOURS_SEEN],
+  }
 }
 
 /** Read once from the database; later calls share the first read. */

@@ -31,7 +31,10 @@ export function ChatList({
   onFilter: (value: ChatFilter) => void
 }) {
   return (
-    <div className="flex w-[300px] shrink-0 flex-col border-r border-line">
+    <div
+      className="flex w-[300px] shrink-0 flex-col border-r border-line"
+      data-tour="inbox-chat-list"
+    >
       <div className="flex flex-col gap-2 border-b border-line p-3">
         <input
           value={search}

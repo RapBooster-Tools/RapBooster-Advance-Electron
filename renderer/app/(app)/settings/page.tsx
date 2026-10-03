@@ -35,9 +35,18 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  help,
+  children,
+}: {
+  title: string
+  /** Help topic id, so F1 inside the section opens help on it. */
+  help: string
+  children: ReactNode
+}) {
   return (
-    <section className="rounded-card border border-line bg-surface p-4">
+    <section className="rounded-card border border-line bg-surface p-4" data-help={help}>
       <h2 className="mb-2 text-sm font-semibold text-ink">{title}</h2>
       {children}
     </section>
@@ -123,7 +132,7 @@ export default function SettingsPage() {
       />
 
       <div className="flex flex-col gap-4 p-6">
-        <Section title="License">
+        <Section title="License" help="settings-license">
           <dl data-testid="license-panel">
             <Row label="Status">
               {license.data ? (
@@ -183,7 +192,7 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        <Section title="Data &amp; diagnostics">
+        <Section title="Data &amp; diagnostics" help="settings-diagnostics">
           <dl>
             <Row label="Database">
               <span className="font-mono text-xs">{paths.data?.database ?? '—'}</span>
@@ -226,7 +235,7 @@ export default function SettingsPage() {
 
         <SendingSafetySection />
 
-        <Section title="Backup &amp; restore">
+        <Section title="Backup &amp; restore" help="settings-backup">
           <p className="mb-2 text-xs text-ink-muted">
             A backup is taken automatically before every migration, restore, and clear.
             These are snapshots of the whole database — contacts, templates, campaigns and

@@ -173,12 +173,16 @@ test.describe('notifications, tray and background running', () => {
   })
 
   test('E8.60 — preferences start from the documented defaults', async () => {
+    // Onboarding and tours read as done here: under E2E, without
+    // RB_ONBOARDING=1, the onboarding seam in prefs.ts reports them that way so
+    // the welcome and tour prompts stay out of specs that predate them. E9.x
+    // covers the real defaults with the seam switched on.
     expect(await call<Prefs>(win, 'app:getPrefs')).toEqual({
       notifications: true,
       runInBackground: true,
       startAtLogin: false,
-      onboardingCompleted: false,
-      toursSeen: [],
+      onboardingCompleted: true,
+      toursSeen: ['*'],
     })
   })
 

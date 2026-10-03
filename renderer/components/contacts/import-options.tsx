@@ -1,5 +1,7 @@
 'use client'
 
+import { FieldHelp } from '@renderer/components/help/field-help'
+
 export interface Preview {
   headers: string[]
   sampleRows: string[][]
@@ -76,9 +78,12 @@ export function ImportOptions({
       </div>
 
       <div className="mt-4 flex flex-col gap-1.5">
-        <label htmlFor="country-answer" className="text-xs font-semibold text-ink">
-          Do these numbers already include their country code?
-        </label>
+        <span className="flex items-center gap-1">
+          <label htmlFor="country-answer" className="text-xs font-semibold text-ink">
+            Do these numbers already include their country code?
+          </label>
+          <FieldHelp id="dial-prefix" />
+        </span>
         <select
           id="country-answer"
           data-testid="country-answer"
@@ -110,9 +115,12 @@ export function ImportOptions({
       </div>
 
       <div className="mt-4 flex flex-col gap-1.5">
-        <label htmlFor="dupe-policy" className="text-xs font-semibold text-ink">
-          When a number already exists in this list
-        </label>
+        <span className="flex items-center gap-1">
+          <label htmlFor="dupe-policy" className="text-xs font-semibold text-ink">
+            When a number already exists in this list
+          </label>
+          <FieldHelp id="duplicate-policy" />
+        </span>
         <select
           id="dupe-policy"
           data-testid="dupe-policy"

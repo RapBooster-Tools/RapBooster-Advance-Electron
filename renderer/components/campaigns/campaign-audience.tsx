@@ -1,5 +1,6 @@
 'use client'
 
+import { FieldHelp } from '@renderer/components/help/field-help'
 import type { QueryState } from '@renderer/hooks/useIpc'
 import type { IpcResponse } from '@shared/ipc'
 
@@ -91,7 +92,10 @@ function TagColumn({
 }) {
   return (
     <fieldset className="flex min-w-0 flex-col gap-1.5">
-      <legend className="text-xs font-semibold text-ink">{legend}</legend>
+      <legend className="flex items-center gap-1 text-xs font-semibold text-ink">
+        {legend}
+        <FieldHelp id="campaign-tags" />
+      </legend>
       <div className="max-h-24 min-h-9 overflow-y-auto rounded-control border border-line p-2">
         {tags.map((tag) => (
           <label key={tag.id} className="flex items-center gap-2 py-0.5 text-sm">

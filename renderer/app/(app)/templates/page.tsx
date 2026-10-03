@@ -4,6 +4,7 @@ import { FileText } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { FilePickerField } from '@renderer/components/common/file-picker-field'
 import { MEDIA_FILTERS } from '@renderer/components/common/media-filters'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -261,6 +262,7 @@ export default function TemplatesPage() {
             variant="primary"
             onClick={() => setCreating(true)}
             data-testid="new-template"
+            data-tour="templates-new"
           >
             + New Template
           </Button>
@@ -287,6 +289,7 @@ export default function TemplatesPage() {
             <div
               key={template.id}
               data-testid="template-card"
+              data-tour="template-card"
               className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4"
             >
               <div className="flex items-start justify-between gap-2">
@@ -420,9 +423,12 @@ export default function TemplatesPage() {
 
             {hasText && (
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="tpl-content" className="text-xs font-semibold text-ink">
-                  {CONTENT_LABEL[type] ?? 'Message Content'}
-                </label>
+                <span className="flex items-center gap-1">
+                  <label htmlFor="tpl-content" className="text-xs font-semibold text-ink">
+                    {CONTENT_LABEL[type] ?? 'Message Content'}
+                  </label>
+                  <FieldHelp id="spintax" />
+                </span>
                 <textarea
                   id="tpl-content"
                   data-testid="tpl-content"
@@ -435,6 +441,7 @@ export default function TemplatesPage() {
                 {availableFields.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1">
                     <span className="text-xs text-ink-muted">Insert:</span>
+                    <FieldHelp id="merge-tags" />
                     {availableFields.map((field) => (
                       <button
                         key={field}

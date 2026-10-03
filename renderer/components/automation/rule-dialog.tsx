@@ -2,6 +2,7 @@
 
 import { useState, type KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
@@ -163,7 +164,11 @@ export function RuleDialog({
           </div>
         </Field>
 
-        <Field label="Match when the message…" htmlFor="rule-match-type">
+        <Field
+          label="Match when the message…"
+          htmlFor="rule-match-type"
+          info={<FieldHelp id="rule-match" />}
+        >
           <select
             id="rule-match-type"
             data-testid="rule-match-type"
@@ -253,6 +258,7 @@ export function RuleDialog({
           <Field
             label="Priority"
             htmlFor="rule-priority"
+            info={<FieldHelp id="flow-priority" />}
             hint="Higher runs first when two rules match."
           >
             <input
@@ -269,6 +275,7 @@ export function RuleDialog({
           <Field
             label="Cooldown per chat (minutes)"
             htmlFor="rule-cooldown"
+            info={<FieldHelp id="rule-cooldown" />}
             hint="Stops the rule answering the same chat again too soon."
           >
             <input

@@ -3,8 +3,10 @@
 import { AlertTriangle } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useToast } from '@renderer/components/providers/toast-provider'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
+import type { FieldHelpId } from '@renderer/help'
 import type { IpcResponse } from '@shared/ipc'
 import { WarmupConfigPanel } from './warmup-config'
 
@@ -28,6 +30,20 @@ const PACING: ReadonlyArray<readonly [string, NumberKey, number, number]> = [
   ['Max devices sending at once', 'maxConcurrentDevices', 1, 20],
   ['Reply attribution window (hours)', 'attributionHours', 1, 720],
 ]
+
+/** The "?" beside the settings whose label alone does not say enough. */
+const PACING_HELP: Partial<Record<NumberKey, FieldHelpId>> = {
+  delayFrom: 'pacing-delay-from',
+  delayTo: 'pacing-delay-from',
+  sleepDuration: 'pacing-sleep',
+  sleepAfter: 'pacing-sleep',
+  groupMessageDelay: 'group-delays',
+  groupCreateDelay: 'group-delays',
+  dailyCapPerDevice: 'daily-cap',
+  retryAttempts: 'retry-attempts',
+  maxConcurrentDevices: 'max-concurrent-devices',
+  attributionHours: 'attribution-hours',
+}
 
 const SWITCHES: ReadonlyArray<readonly [BooleanKey, string, string]> = [
   [
@@ -53,17 +69,22 @@ const inputClass =
 function Field({
   id,
   label,
+  help,
   children,
 }: {
   id: string
   label: string
+  help?: FieldHelpId | undefined
   children: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-xs font-semibold text-ink">
-        {label}
-      </label>
+      <span className="flex items-center gap-1">
+        <label htmlFor={id} className="text-xs font-semibold text-ink">
+          {label}
+        </label>
+        {help && <FieldHelp id={help} />}
+      </span>
       {children}
     </div>
   )
@@ -99,7 +120,10 @@ export function SendingSafetySection() {
   }
 
   return (
-    <section className="rounded-card border border-line bg-surface p-4">
+    <section
+      className="rounded-card border border-line bg-surface p-4"
+      data-help="settings-sending"
+    >
       <h2 className="mb-2 text-sm font-semibold text-ink">Sending &amp; safety</h2>
       <p className="mb-3 text-xs text-ink-muted">
         The daily cap, quiet hours and typing apply to every device as soon as you save.
@@ -124,7 +148,7 @@ export function SendingSafetySection() {
 
           <div className="grid grid-cols-3 gap-3">
             {PACING.map(([label, key, min, max]) => (
-              <Field key={key} id={`sd-${key}`} label={label}>
+              <Field key={key} id={`sd-${key}`} label={label} help={PACING_HELP[key]}>
                 <input
                   id={`sd-${key}`}
                   data-testid={`sd-${key}`}
@@ -140,16 +164,19 @@ export function SendingSafetySection() {
           </div>
 
           <div className="mt-4 rounded-card border border-line p-3">
-            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
-                checked={sending.quietHoursEnabled}
-                onChange={(e) => set({ quietHoursEnabled: e.target.checked })}
-                data-testid="sd-quietHoursEnabled"
-              />
-              Quiet hours
-            </label>
+            <div className="flex items-center gap-1">
+              <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={sending.quietHoursEnabled}
+                  onChange={(e) => set({ quietHoursEnabled: e.target.checked })}
+                  data-testid="sd-quietHoursEnabled"
+                />
+                Quiet hours
+              </label>
+              <FieldHelp id="quiet-hours" />
+            </div>
             <p className="mt-1 text-xs text-ink-muted">
               Campaigns, follow-up sequences, bulk group messages and warmup pause in this
               window (local time) and resume when it ends. Replies to customers — AI,

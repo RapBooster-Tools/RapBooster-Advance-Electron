@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import type { IpcResponse } from '@shared/ipc'
 import { useToast } from '@renderer/components/providers/toast-provider'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import { Field, INPUT_CLASS } from './field'
@@ -127,6 +128,7 @@ function WelcomeAwayForm({ initial, onSaved }: { initial: Config; onSaved: () =>
         <Field
           label="Send the away message to the same chat at most every (hours)"
           htmlFor="away-cooldown"
+          info={<FieldHelp id="away-cooldown" />}
           hint="Stops a customer who sends several messages at night from getting it each time."
         >
           <input

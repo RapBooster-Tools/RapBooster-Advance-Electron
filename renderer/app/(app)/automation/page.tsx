@@ -28,7 +28,11 @@ export default function AutomationPage() {
         title="Automation"
         description="Chatbot flows, keyword auto-replies, welcome and away messages, webhooks and call handling"
       />
-      <div className="flex gap-1 border-b border-line px-6 pt-3" role="tablist">
+      <div
+        className="flex gap-1 border-b border-line px-6 pt-3"
+        role="tablist"
+        data-tour="automation-tabs"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}

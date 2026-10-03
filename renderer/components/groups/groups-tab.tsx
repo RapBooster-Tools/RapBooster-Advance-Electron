@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useToast } from '@renderer/components/providers/toast-provider'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import { cn } from '@renderer/lib/cn'
@@ -186,9 +187,12 @@ export function GroupsTab({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="group-delay" className="text-xs font-semibold text-ink">
-            Delay Between Messages (seconds)
-          </label>
+          <span className="flex items-center gap-1">
+            <label htmlFor="group-delay" className="text-xs font-semibold text-ink">
+              Delay Between Messages (seconds)
+            </label>
+            <FieldHelp id="group-send-delay" />
+          </span>
           <input
             id="group-delay"
             type="number"

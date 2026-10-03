@@ -33,7 +33,7 @@ const SAMPLE: PreviewMessage[] = [
 export function AppearanceSection() {
   const { resolved } = useTheme()
   return (
-    <Card data-testid="appearance-section">
+    <Card data-testid="appearance-section" data-help="settings-appearance">
       <CardHeader
         icon={<Palette />}
         title="Appearance"
