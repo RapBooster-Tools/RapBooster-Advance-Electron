@@ -5,6 +5,8 @@ import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import { missingTags } from '@shared/merge-tags'
+import { CampaignAudienceTags, type TagAudience } from './campaign-audience'
+import { PacingFields, type Pacing } from './pacing-fields'
 
 /**
  * Create-campaign dialog. Fields and defaults follow the prototype
@@ -20,16 +22,24 @@ export function CreateCampaignDialog({
   const devices = useIpcQuery('device:list')
   const lists = useIpcQuery('contactList:list')
   const templates = useIpcQuery('template:list')
+  const tags = useIpcQuery('tag:list')
 
   const [name, setName] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [deviceIds, setDeviceIds] = useState<string[]>([])
   const [listIds, setListIds] = useState<string[]>([])
   const [scheduledAt, setScheduledAt] = useState('')
-  const [delayFrom, setDelayFrom] = useState(0)
-  const [delayTo, setDelayTo] = useState(5)
-  const [sleepDuration, setSleepDuration] = useState(10)
-  const [sleepAfter, setSleepAfter] = useState(10)
+  const [pacing, setPacing] = useState<Pacing>({
+    delayFrom: 0,
+    delayTo: 5,
+    sleepDuration: 10,
+    sleepAfter: 10,
+  })
+  const [audience, setAudience] = useState<TagAudience>({
+    includeTagIds: [],
+    excludeTagIds: [],
+  })
+  const [checkNumbers, setCheckNumbers] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -56,6 +66,11 @@ export function CreateCampaignDialog({
     [listIds, lists.data],
   )
 
+  const tagNames = (ids: string[]) =>
+    ids.map((id) => tags.data?.find((t) => t.id === id)?.name ?? '').filter(Boolean)
+  const included = tagNames(audience.includeTagIds)
+  const excluded = tagNames(audience.excludeTagIds)
+
   function toggle(setter: (fn: (c: string[]) => string[]) => void, id: string) {
     setter((current) =>
       current.includes(id) ? current.filter((x) => x !== id) : [...current, id],
@@ -72,10 +87,10 @@ export function CreateCampaignDialog({
       deviceIds,
       listIds,
       ...(scheduledAt ? { scheduledAt: new Date(scheduledAt).toISOString() } : {}),
-      delayFrom,
-      delayTo,
-      sleepDuration,
-      sleepAfter,
+      ...pacing,
+      includeTagIds: audience.includeTagIds,
+      excludeTagIds: audience.excludeTagIds,
+      checkNumbers,
     })
     setBusy(false)
 
@@ -180,6 +195,25 @@ export function CreateCampaignDialog({
           </div>
         </fieldset>
 
+        <CampaignAudienceTags tags={tags} value={audience} onChange={setAudience} />
+
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            data-testid="cmp-check-numbers"
+            checked={checkNumbers}
+            onChange={(e) => setCheckNumbers(e.target.checked)}
+          />
+          <span>
+            Skip numbers not on WhatsApp
+            <span className="block text-xs text-ink-muted">
+              Checks each number just before sending and skips the ones without an
+              account, instead of counting them as failures.
+            </span>
+          </span>
+        </label>
+
         <div className="flex flex-col gap-1.5">
           <label htmlFor="cmp-template" className="text-xs font-semibold text-ink">
             Select Template
@@ -229,58 +263,15 @@ export function CreateCampaignDialog({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          {(
-            [
-              [
-                'Random Delay From (sec)',
-                delayFrom,
-                setDelayFrom,
-                0,
-                300,
-                'cmp-delay-from',
-              ],
-              ['Random Delay To (sec)', delayTo, setDelayTo, 0, 300, 'cmp-delay-to'],
-              [
-                'Sleep Duration (sec)',
-                sleepDuration,
-                setSleepDuration,
-                0,
-                600,
-                'cmp-sleep',
-              ],
-              [
-                'Sleep After N Messages',
-                sleepAfter,
-                setSleepAfter,
-                1,
-                100,
-                'cmp-sleep-after',
-              ],
-            ] as const
-          ).map(([label, value, setter, min, max, testId]) => (
-            <div key={testId} className="flex flex-col gap-1.5">
-              <label htmlFor={testId} className="text-xs font-semibold text-ink">
-                {label}
-              </label>
-              <input
-                id={testId}
-                data-testid={testId}
-                type="number"
-                min={min}
-                max={max}
-                value={value}
-                onChange={(e) => setter(Number(e.target.value))}
-                className="rounded-control border border-line px-2.5 py-2 text-sm outline-none focus:border-primary"
-              />
-            </div>
-          ))}
-        </div>
+        <PacingFields value={pacing} onChange={setPacing} />
 
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink-muted" data-testid="cmp-audience-summary">
           {selectedContacts.toLocaleString()} contacts selected across {listIds.length}{' '}
           list
-          {listIds.length === 1 ? '' : 's'}.
+          {listIds.length === 1 ? '' : 's'}
+          {included.length > 0 && <>, plus contacts tagged {included.join(', ')}</>}
+          {excluded.length > 0 && <>, excluding anyone tagged {excluded.join(', ')}</>}.
+          Each number is messaged once.
         </p>
 
         {error && (

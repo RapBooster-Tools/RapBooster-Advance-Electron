@@ -14,6 +14,9 @@ interface Recipient {
   attempts: number
   error: string | null
   sentAt: string | null
+  deliveredAt: string | null
+  readAt: string | null
+  repliedAt: string | null
 }
 
 const FILTERS: Array<{ value: RecipientStatus | 'all'; label: string }> = [
@@ -21,7 +24,13 @@ const FILTERS: Array<{ value: RecipientStatus | 'all'; label: string }> = [
   { value: 'sent', label: 'Sent' },
   { value: 'failed', label: 'Failed' },
   { value: 'pending', label: 'Pending' },
+  { value: 'skipped', label: 'Skipped' },
 ]
+
+/** A receipt or reply time, or a dash. */
+function when(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleTimeString() : '—'
+}
 
 const TONE: Record<RecipientStatus, string> = {
   sent: 'text-success',
@@ -118,7 +127,7 @@ export function RecipientsDialog({
       onClose={onClose}
       title={`Recipients — ${campaignName}`}
       testId="recipients-dialog"
-      width={720}
+      width={860}
       footer={<Button onClick={onClose}>Close</Button>}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -152,7 +161,17 @@ export function RecipientsDialog({
           <table className="w-full text-xs">
             <thead className="bg-app-bg">
               <tr>
-                {['Phone', 'Name', 'Status', 'Tries', 'Sent', 'Error'].map((h) => (
+                {[
+                  'Phone',
+                  'Name',
+                  'Status',
+                  'Tries',
+                  'Sent',
+                  'Delivered',
+                  'Read',
+                  'Replied',
+                  'Error / reason',
+                ].map((h) => (
                   <th
                     key={h}
                     className="px-2 py-1.5 text-left font-medium text-ink-muted"
@@ -177,12 +196,33 @@ export function RecipientsDialog({
                     {r.status}
                   </td>
                   <td className="px-2 py-1.5 text-ink">{r.attempts}</td>
+                  {/* A skipped row was never sent; the time on it is when it was ruled out. */}
                   <td className="px-2 py-1.5 text-ink-muted">
-                    {r.sentAt ? new Date(r.sentAt).toLocaleTimeString() : '—'}
+                    {r.status === 'skipped' ? '—' : when(r.sentAt)}
                   </td>
                   <td
-                    className="max-w-48 truncate px-2 py-1.5 text-danger"
+                    className="px-2 py-1.5 text-ink-muted"
+                    data-testid="recipient-delivered"
+                  >
+                    {when(r.deliveredAt ?? r.readAt)}
+                  </td>
+                  <td className="px-2 py-1.5 text-ink-muted" data-testid="recipient-read">
+                    {when(r.readAt)}
+                  </td>
+                  <td
+                    className="px-2 py-1.5 text-ink-muted"
+                    data-testid="recipient-replied"
+                  >
+                    {when(r.repliedAt)}
+                  </td>
+                  <td
+                    className={cn(
+                      'max-w-48 truncate px-2 py-1.5',
+                      // A skip is a decision, not a fault: shown as a reason.
+                      r.status === 'skipped' ? 'text-ink-muted' : 'text-danger',
+                    )}
                     title={r.error ?? ''}
+                    data-testid="recipient-error"
                   >
                     {r.error ?? ''}
                   </td>
