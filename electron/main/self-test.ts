@@ -24,6 +24,7 @@ import { listBackups } from './db/backup'
 import { previewImportFile } from './services/import/row-source'
 import { trayIcon } from './services/desktop/tray'
 import { PROBE_XLSX_BASE64 } from './self-test-fixtures'
+import { waServicePath } from './wa-service-path'
 
 const failures: string[] = []
 
@@ -221,6 +222,10 @@ async function main(): Promise<void> {
   } catch (err) {
     check('baileys voice-note waveform', false, String(err))
   }
+
+  // 0. Every WhatsApp feature runs in wa-service; a wrong entry path means no
+  //    device can ever connect.
+  check('wa-service entry found', existsSync(waServicePath()), waServicePath())
 
   // 8. Excel import runs in a worker thread built as its own chunk, and
   //    read-excel-file pulls in further modules at runtime. Dev resolves both

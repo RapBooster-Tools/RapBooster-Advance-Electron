@@ -7,7 +7,6 @@
  * must not lose work.
  */
 import { utilityProcess, type UtilityProcess } from 'electron'
-import { join } from 'node:path'
 import type {
   WaEventKind,
   WaEvents,
@@ -18,6 +17,7 @@ import type {
   WaResponses,
 } from '../../shared/wa-protocol'
 import { isEventEnvelope } from '../../shared/wa-protocol'
+import { waServicePath } from './wa-service-path'
 
 const HEALTH_INTERVAL_MS = 15_000
 const HEALTH_TIMEOUT_MS = 5_000
@@ -63,18 +63,12 @@ export class WaBridge {
     this.onStateChange?.(next, this.restarts)
   }
 
-  private servicePath(): string {
-    // electron-vite emits the service as an extra entry of the main build,
-    // so it lands in a subdirectory of out/main.
-    return join(__dirname, 'wa-service', 'index.js')
-  }
-
   start(): void {
     if (this.child) return
     this.stopping = false
     this.setState(this.restarts === 0 ? 'starting' : 'restarting')
 
-    const child = utilityProcess.fork(this.servicePath(), [], {
+    const child = utilityProcess.fork(waServicePath(), [], {
       serviceName: 'wa-service',
       stdio: 'inherit',
       env: {
