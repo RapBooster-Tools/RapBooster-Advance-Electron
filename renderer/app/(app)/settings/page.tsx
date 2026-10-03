@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { PageHeader } from '@renderer/components/layout/page-header'
+import { DesktopPrefsSection } from '@renderer/components/settings/desktop-prefs'
 import { SendingSafetySection } from '@renderer/components/settings/sending-safety-section'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -214,6 +215,8 @@ export default function SettingsPage() {
             Diagnostics contain no message content; phone numbers and keys are redacted.
           </p>
         </Section>
+
+        <DesktopPrefsSection />
 
         <SendingSafetySection />
 
