@@ -112,6 +112,51 @@ function serializeChat(
   }
 }
 
+/**
+ * Store a message this account sent and move its chat to the top of the list.
+ *
+ * WHY shared: typed replies, rich sends and scheduled messages (Wave 3) all
+ * record an outbound message; one writer keeps the row shape and the chat
+ * preview identical however the message left.
+ */
+export async function persistOutgoing(
+  chatId: string,
+  row: {
+    id: string
+    type: MessageType
+    body: string | null
+    mediaPath?: string | null
+    fileName?: string | null
+    buttons?: string | null
+    /** The chat list's one-line preview. */
+    preview: string
+  },
+): Promise<ReturnType<typeof serializeMessage>> {
+  const prisma = getPrisma()
+  const at = new Date()
+  const [saved] = await prisma.$transaction([
+    prisma.message.create({
+      data: {
+        id: row.id,
+        chatId,
+        direction: 'out',
+        type: row.type,
+        body: row.body,
+        mediaPath: row.mediaPath ?? null,
+        fileName: row.fileName ?? null,
+        buttons: row.buttons ?? null,
+        status: 'sent',
+        timestamp: at,
+      },
+    }),
+    prisma.chat.update({
+      where: { id: chatId },
+      data: { lastMessage: row.preview, lastMessageAt: at },
+    }),
+  ])
+  return serializeMessage(saved)
+}
+
 export function registerChatHandlers(): void {
   registerHandler('chat:list', async ({ deviceId, search, filter, cursor, limit }) => {
     const where = {
@@ -231,26 +276,14 @@ export function registerChatHandlers(): void {
       })
     }
 
-    const saved = await getPrisma().message.create({
-      data: {
-        id: messageId,
-        chatId,
-        direction: 'out',
-        type: mediaSourcePath ? 'media' : buttons?.length ? 'buttons' : 'text',
-        body: body ?? null,
-        mediaPath: mediaSourcePath ?? null,
-        buttons: buttons?.length ? JSON.stringify(buttons) : null,
-        status: 'sent',
-        timestamp: new Date(),
-      },
+    return persistOutgoing(chatId, {
+      id: messageId,
+      type: mediaSourcePath ? 'media' : buttons?.length ? 'buttons' : 'text',
+      body: body ?? null,
+      mediaPath: mediaSourcePath ?? null,
+      buttons: buttons?.length ? JSON.stringify(buttons) : null,
+      preview: body ?? '[media]',
     })
-
-    await getPrisma().chat.update({
-      where: { id: chatId },
-      data: { lastMessage: body ?? '[media]', lastMessageAt: new Date() },
-    })
-
-    return serializeMessage(saved)
   })
 
   registerHandler('chat:sendRich', async ({ chatId, message }) => {
@@ -279,26 +312,14 @@ export function registerChatHandlers(): void {
       })
     }
 
-    const saved = await getPrisma().message.create({
-      data: {
-        id: messageId,
-        chatId,
-        direction: 'out',
-        type: prepared.type,
-        body: prepared.summary,
-        mediaPath: prepared.mediaPath,
-        fileName: prepared.fileName,
-        status: 'sent',
-        timestamp: new Date(),
-      },
+    return persistOutgoing(chatId, {
+      id: messageId,
+      type: prepared.type,
+      body: prepared.summary,
+      mediaPath: prepared.mediaPath,
+      fileName: prepared.fileName,
+      preview: prepared.summary,
     })
-
-    await getPrisma().chat.update({
-      where: { id: chatId },
-      data: { lastMessage: prepared.summary, lastMessageAt: new Date() },
-    })
-
-    return serializeMessage(saved)
   })
 
   registerHandler('chat:markRead', async ({ chatId }) => {

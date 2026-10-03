@@ -5,7 +5,7 @@
  * sticker into the open chat (D89). Each goes out through `chat:sendRich`, the
  * same paced path as a typed reply.
  */
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import {
   emptyContact,
@@ -20,7 +20,6 @@ import {
 } from '@renderer/components/templates/rich-draft'
 import {
   ContactFields,
-  FilePathField,
   INPUT_CLASS,
   LocationFields,
   PollFields,
@@ -29,6 +28,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import type { IpcResponse } from '@shared/ipc'
 import type { InboxRichMessage } from '@shared/rich-message'
+import { fileNameOf, pickOneFile } from './inbox-types'
 
 type Kind = InboxRichMessage['kind']
 type SentMessage = IpcResponse<'chat:sendRich'>
@@ -49,13 +49,16 @@ const DIALOG_TITLE: Record<Kind, string> = {
   sticker: 'Send a sticker',
 }
 
-const FILE_HINT: Record<'voice' | 'sticker', { placeholder: string; hint: string }> = {
+const FILE_KIND: Record<
+  'voice' | 'sticker',
+  { filter: { name: string; extensions: string[] }; hint: string }
+> = {
   voice: {
-    placeholder: 'C:\\Users\\you\\note.ogg',
+    filter: { name: 'Audio', extensions: ['ogg', 'opus', 'mp3', 'm4a', 'aac', 'wav'] },
     hint: 'OGG/Opus arrives as a voice note; MP3, M4A, AAC and WAV also work. Up to 16 MB.',
   },
   sticker: {
-    placeholder: 'C:\\Users\\you\\sticker.webp',
+    filter: { name: 'Stickers', extensions: ['webp'] },
     hint: 'Stickers must be WebP, up to 1 MB.',
   },
 }
@@ -84,7 +87,9 @@ export function RichComposer({
     setError(undefined)
   }
 
-  function close() {
+  // Stable on purpose: Dialog re-runs its focus effect whenever onClose changes,
+  // and a new function per render would pull focus out of the field being typed in.
+  const close = useCallback(() => {
     setKind(undefined)
     setLocation(emptyLocation())
     setContacts([emptyContact()])
@@ -92,7 +97,7 @@ export function RichComposer({
     setPoll(emptyPoll())
     setFilePath('')
     setError(undefined)
-  }
+  }, [])
 
   function build(current: Kind): InboxRichMessage | string {
     switch (current) {
@@ -113,9 +118,18 @@ export function RichComposer({
       }
       case 'voice':
       case 'sticker':
-        return filePath.trim() === ''
-          ? 'Enter the path of the file to send.'
-          : { kind: current, mediaSourcePath: filePath.trim() }
+        return filePath === ''
+          ? 'Choose the file to send.'
+          : { kind: current, mediaSourcePath: filePath }
+    }
+  }
+
+  async function chooseFile(current: 'voice' | 'sticker') {
+    const picked = await pickOneFile(DIALOG_TITLE[current], [FILE_KIND[current].filter])
+    if (picked.error) setError(picked.error)
+    else if (picked.path) {
+      setFilePath(picked.path)
+      setError(undefined)
     }
   }
 
@@ -221,14 +235,25 @@ export function RichComposer({
               </>
             )}
             {(kind === 'voice' || kind === 'sticker') && (
-              <FilePathField
-                id="rich-file-path"
-                label="File path"
-                placeholder={FILE_HINT[kind].placeholder}
-                hint={FILE_HINT[kind].hint}
-                value={filePath}
-                onChange={setFilePath}
-              />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-ink">File</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void chooseFile(kind)}
+                    data-testid="rich-pick-file"
+                  >
+                    Choose file…
+                  </Button>
+                  <span
+                    className="min-w-0 truncate text-xs text-ink"
+                    data-testid="rich-file-name"
+                  >
+                    {filePath ? fileNameOf(filePath) : 'No file chosen'}
+                  </span>
+                </div>
+                <p className="text-xs text-ink-subtle">{FILE_KIND[kind].hint}</p>
+              </div>
             )}
             {error && (
               <p className="text-xs text-danger" role="alert" data-testid="rich-error">
