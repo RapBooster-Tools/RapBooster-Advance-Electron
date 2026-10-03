@@ -163,6 +163,10 @@ test.describe('help without onboarding (the default under E2E)', () => {
     await win.getByTestId('new-campaign').click()
     await win.getByTestId('info-pacing-sleep').first().focus()
     await expect(win.getByRole('tooltip')).toHaveText(FIELD_HELP['pacing-sleep'].text)
+    // Escape on an open tooltip dismisses only the tooltip, never the dialog.
+    await win.keyboard.press('Escape')
+    await expect(win.getByRole('tooltip')).toHaveCount(0)
+    await expect(win.getByTestId('cmp-name')).toBeVisible()
     // F1 over an open dialog: help opens above it, and Escape closes only help.
     await win.getByTestId('cmp-name').focus()
     await win.keyboard.press('F1')

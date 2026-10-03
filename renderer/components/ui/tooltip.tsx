@@ -101,6 +101,28 @@ export function Tooltip({
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const open = style !== null && !disabled
+  const openRef = useRef(open)
+  useEffect(() => {
+    openRef.current = open
+  }, [open])
+
+  // NOTE: a native listener, not React's onKeyDown. React handles events at
+  // its root, which here is the document — the same place the Dialog listens
+  // for Escape — so a React stopPropagation runs too late and Escape on an
+  // open tooltip also closed the dialog behind it. A listener on the trigger
+  // runs first, while the event is still on its way up.
+  useEffect(() => {
+    const node = anchor.current
+    if (!node) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !openRef.current) return
+      // Dismiss only the tooltip — not the dialog it may be sitting in.
+      event.stopPropagation()
+      hide()
+    }
+    node.addEventListener('keydown', onKeyDown)
+    return () => node.removeEventListener('keydown', onKeyDown)
+  }, [hide])
 
   return (
     <span
@@ -110,13 +132,6 @@ export function Tooltip({
       onPointerLeave={hide}
       onFocus={() => show(0)}
       onBlur={hide}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && open) {
-          // Dismiss only the tooltip — not the dialog it may be sitting in.
-          event.stopPropagation()
-          hide()
-        }
-      }}
     >
       {cloneElement(children, open ? { 'aria-describedby': id } : {})}
       {open &&
