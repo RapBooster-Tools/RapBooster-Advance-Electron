@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { PageHeader } from '@renderer/components/layout/page-header'
+import { SendingSafetySection } from '@renderer/components/settings/sending-safety-section'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 import { StatusPill } from '@renderer/components/ui/status-pill'
@@ -49,30 +50,10 @@ export default function SettingsPage() {
   const license = useIpcQuery('license:status')
   const paths = useIpcQuery('system:paths')
   const version = useIpcQuery('system:version')
-  const defaults = useIpcQuery('settings:getSendingDefaults')
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [clearConfirm, setClearConfirm] = useState('')
-
-  // Edits overlay the loaded values rather than being copied in by an effect —
-  // see the AI Bot screen for the same pattern and reasoning.
-  const [sendingEdits, setSendingEdits] = useState<NonNullable<typeof defaults.data>>()
-
-  async function saveDefaults() {
-    const next = sendingEdits ?? defaults.data
-    if (!next) return
-    setBusy(true)
-    const result = await window.api.invoke('settings:setSendingDefaults', next)
-    setBusy(false)
-    if (!result.ok) {
-      toast('error', result.error.userMessage)
-      return
-    }
-    setSendingEdits(undefined)
-    defaults.refetch()
-    toast('success', 'Sending defaults saved')
-  }
 
   async function backupNow() {
     setBusy(true)
@@ -131,9 +112,6 @@ export default function SettingsPage() {
       toast('error', result.error.userMessage)
     }
   }
-
-  // Hoisted so the narrowing is provable inside JSX rather than asserted.
-  const sending = sendingEdits ?? defaults.data
 
   return (
     <>
@@ -237,66 +215,7 @@ export default function SettingsPage() {
           </p>
         </Section>
 
-        <Section title="Sending defaults">
-          <p className="mb-2 text-xs text-ink-muted">
-            Applied to new campaigns. Existing campaigns keep the pacing they were created
-            with — changing a running campaign&rsquo;s rhythm mid-send is exactly what
-            gets accounts flagged.
-          </p>
-
-          {sending && (
-            <>
-              <div className="grid grid-cols-3 gap-3">
-                {(
-                  [
-                    ['Delay from (sec)', 'delayFrom', 0, 300],
-                    ['Delay to (sec)', 'delayTo', 0, 300],
-                    ['Sleep duration (sec)', 'sleepDuration', 0, 600],
-                    ['Sleep after N messages', 'sleepAfter', 1, 100],
-                    ['Group message delay (sec)', 'groupMessageDelay', 0, 300],
-                    ['Group create delay (sec)', 'groupCreateDelay', 0, 60],
-                    ['Daily cap per device (0 = none)', 'dailyCapPerDevice', 0, 100000],
-                    ['Retry attempts', 'retryAttempts', 0, 10],
-                    ['Max concurrent devices', 'maxConcurrentDevices', 1, 20],
-                  ] as const
-                ).map(([label, key, min, max]) => (
-                  <div key={key} className="flex flex-col gap-1.5">
-                    <label
-                      htmlFor={`sd-${key}`}
-                      className="text-xs font-semibold text-ink"
-                    >
-                      {label}
-                    </label>
-                    <input
-                      id={`sd-${key}`}
-                      data-testid={`sd-${key}`}
-                      type="number"
-                      min={min}
-                      max={max}
-                      value={sending[key]}
-                      onChange={(e) =>
-                        setSendingEdits({
-                          ...sending,
-                          [key]: Number(e.target.value),
-                        })
-                      }
-                      className="rounded-control border border-line px-2.5 py-2 text-sm outline-none focus:border-primary"
-                    />
-                  </div>
-                ))}
-              </div>
-              <Button
-                className="mt-3"
-                variant="primary"
-                onClick={saveDefaults}
-                disabled={busy}
-                data-testid="save-sending-defaults"
-              >
-                Save sending defaults
-              </Button>
-            </>
-          )}
-        </Section>
+        <SendingSafetySection />
 
         <Section title="Backup &amp; restore">
           <p className="mb-2 text-xs text-ink-muted">

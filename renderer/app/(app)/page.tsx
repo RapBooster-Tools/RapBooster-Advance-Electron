@@ -1,5 +1,10 @@
 'use client'
 
+import { useState } from 'react'
+import { AnalyticsChart } from '@renderer/components/dashboard/analytics-chart'
+import { AttentionCards } from '@renderer/components/dashboard/attention-cards'
+import { DeviceUsage } from '@renderer/components/dashboard/device-usage'
+import { SafetyBanner } from '@renderer/components/dashboard/safety-banner'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useIpcEvent, useIpcQuery } from '@renderer/hooks/useIpc'
 
@@ -24,18 +29,36 @@ function StatCard({
 
 /**
  * Dashboard. The prototype's four stat cards, with real aggregates rather than
- * its hardcoded numbers. Definitions come from REQUIREMENTS §7.1.
+ * its hardcoded numbers (definitions in REQUIREMENTS §7.1), plus seven days of
+ * outcomes, each device's usage against its cap, and inbox work waiting on a
+ * person (D89).
  */
 export default function DashboardPage() {
   const stats = useIpcQuery('system:dashboard')
+  const analytics = useIpcQuery('system:analytics')
   const loading = stats.loading
 
   // The dashboard is the landing route, so it is frequently already mounted
   // when the numbers change. Without these it would sit showing stale counts
   // for as long as the window stayed open.
-  useIpcEvent('campaign:progress', () => stats.refetch())
-  useIpcEvent('device:status', () => stats.refetch())
+  useIpcEvent('campaign:progress', () => {
+    stats.refetch()
+    analytics.refetch()
+  })
+  useIpcEvent('device:status', () => {
+    stats.refetch()
+    analytics.refetch()
+  })
   useIpcEvent('message:received', () => stats.refetch())
+  useIpcEvent('device:updated', () => analytics.refetch())
+  useIpcEvent('chat:updated', () => analytics.refetch())
+
+  // Each refetch clears `data` until it settles; holding the last result keeps
+  // the chart from flashing empty on every progress event.
+  type Analytics = NonNullable<typeof analytics.data>
+  const [lastAnalytics, setLastAnalytics] = useState<Analytics>()
+  if (analytics.data && analytics.data !== lastAnalytics) setLastAnalytics(analytics.data)
+  const insight = analytics.data ?? lastAnalytics
 
   const cards = [
     { label: 'Total Contacts', value: stats.data?.totalContacts ?? 0 },
@@ -48,6 +71,7 @@ export default function DashboardPage() {
     <>
       <PageHeader title="Dashboard" />
       <div className="flex-1 p-6">
+        <SafetyBanner />
         {stats.error ? (
           <p className="text-sm text-danger" role="alert">
             {stats.error.userMessage}
@@ -74,6 +98,20 @@ export default function DashboardPage() {
                 loading={loading}
               />
             </div>
+            {insight && (
+              <>
+                <div className="mt-4">
+                  <AttentionCards
+                    escalated={insight.escalated}
+                    drafts={insight.repliesAwaiting}
+                  />
+                </div>
+                <div className="mt-4 grid gap-4 xl:grid-cols-[2fr_1fr]">
+                  <AnalyticsChart days={insight.days} />
+                  <DeviceUsage devices={insight.devices} />
+                </div>
+              </>
+            )}
           </>
         )}
         <span data-testid="renderer-ready" className="sr-only">
