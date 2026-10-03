@@ -4,32 +4,42 @@ An Electron + Next.js desktop application for WhatsApp marketing, built on
 [Baileys](https://github.com/WhiskeySockets/Baileys), with a local SQLite database created per
 user in the OS application-data directory.
 
-> **Status: feature-complete, not yet shippable.**
-> All four sprints are built and the full test suite passes against a packaged build. What is
-> missing is the release itself — no build has been signed and no update has ever been
-> installed, because that needs branding, an update feed URL and code-signing certificates.
-> See [REQUIREMENTS.md §2–§4](./REQUIREMENTS.md) and [RELEASE.md](./RELEASE.md).
+> **Status (2026-10-03): feature-complete for the marketing suite, not yet shippable.**
+> 214 of 219 E2E tests pass on the merged tree (two since fixed, two need an OS keyring, one
+> is a measurement-only skip). Wave 3 — design system, help and tours, inbox and automation
+> additions — is in progress. What is missing for a release is input only the customer can
+> give: the license server API, code-signing certificates (Windows, and an Apple Developer ID
+> with a Mac to build on), branding and an update feed. See [REQUIREMENTS.md](./REQUIREMENTS.md),
+> [RELEASE.md](./RELEASE.md) and [SPRINT-TRACKER.md](./SPRINT-TRACKER.md).
 >
-> **An unsigned Windows installer triggers a SmartScreen warning most people will not click
-> through, and an unsigned Mac app will not open at all.** Code signing (a Windows
-> certificate and an Apple Developer ID) is what stands between this and a shippable product.
->
-> **Windows and macOS** are both distribution targets (Apple Silicon and Intel).
+> **Windows and macOS** are both distribution targets (Apple Silicon and Intel). An unsigned
+> Windows installer triggers a SmartScreen warning; an unsigned Mac app will not open.
 
 ## What it does
 
-Nine screens, all derived from the prototypes in `design/`:
+Twelve screens behind a license activation gate: **Dashboard** · **Inbox** · **Campaigns** ·
+**Sequences** · **Status & Channels** · **WA Groups** · **Devices** · **Contacts** ·
+**Templates** · **Automation** · **AI Bot** · **Settings**.
 
-**Dashboard** · **Inbox** · **Campaigns** · **WA Groups** · **Devices** · **Contacts** ·
-**Templates** · **AI Bot** · **Settings**, behind a license activation gate.
+- **Devices:** up to 20 WhatsApp accounts at once, by QR code or pairing code; warmup ramp for
+  new numbers, automatic health pause, Business labels and catalog
+- **Contacts:** lists with custom fields, CSV and Google Sheets import at 50,000-row scale, tags,
+  an opt-out list with STOP/START replies, and a check for which numbers are on WhatsApp
+- **Templates:** text, media, buttons, lists, polls, locations, contact cards, voice notes,
+  stickers, events and products, with `{{Name}}` merge tags and `{Hi|Hello}` spintax
+- **Campaigns:** lists and tag audiences, random delays, daily caps, quiet hours, scheduling,
+  crash-safe resume, and delivered/read/replied analytics
+- **Sequences:** timed drip messages that stop when the contact replies
+- **Groups:** bulk messaging and creation, invite links, member management, a member grabber,
+  and communities
+- **Status & Channels:** status updates and WhatsApp Channel posts, now or scheduled
+- **Automation:** keyword auto-replies, signed webhooks, call auto-reject
+- **AI Bot:** OpenAI, Anthropic, Gemini or any OpenAI-compatible service, with daily caps,
+  approval drafts and hand-off to a person
+- **Inbox:** one inbox across every number, with rich attachments
 
-- Connect up to 20 WhatsApp accounts concurrently, by QR code or 8-digit pairing code
-- Contact lists with custom fields, CSV import/export at 50,000-row scale
-- Message templates — text, media, interactive, and button — with `{{Name}}` merge tags
-- Bulk campaigns with randomized delays, sleep intervals, scheduling, and crash-safe resume
-- Group sync, bulk group messaging, and bulk group creation
-- Unified inbox across all connected devices
-- OpenAI-powered auto-replies with escalation rules
+Every send — campaign, sequence, group, AI or a person in the inbox — goes through one pacing
+engine, so the safety limits always hold.
 
 ## Requirements
 
@@ -105,8 +115,12 @@ like a bad day, which is where the interesting bugs are:
 WA_MOCK_FAIL_RATE=0.2 WA_MOCK_LATENCY_MS=400 npm run dev:mock
 ```
 
-Runtime data lives under `%APPDATA%\RapBooster`. Delete that folder to start from a clean
-database and an unactivated app.
+The test-only seams the E2E suite uses are listed in [docs/DECISIONS.md](./docs/DECISIONS.md)
+(D92).
+
+Runtime data lives under `%APPDATA%\RapBooster` on Windows and
+`~/Library/Application Support/RapBooster Advance` on macOS. Delete that folder to start from a
+clean database and an unactivated app.
 
 ## Commands
 
@@ -114,11 +128,11 @@ database and an unactivated app.
 | -------------------- | ----------------------------------------------------------------------------------- |
 | `npm run dev`        | Development, with hot reload                                                        |
 | `npm run dev:mock`   | Development with the mock license server and mock WhatsApp transport                |
-| `npm run verify`     | Format, lint, typecheck, and dependency checks — run before committing              |
+| `npm run verify`     | Format, lint, typecheck, dependency, source and migration checks                    |
 | `npm run build`      | Production bundles for main, preload, wa-service and the renderer                   |
 | `npm run pack`       | Unpacked build in `dist/`, no installer                                             |
 | `npm run dist`       | Installer for the current platform in `dist/` (NSIS on Windows, dmg + zip on macOS) |
-| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (81 specs)                   |
+| `npm run test:e2e`   | Full Playwright suite against a real Electron instance (219 tests)                  |
 | `npm run test:smoke` | Packages the app and runs its self-test — catches asar/native issues                |
 | `npm run db:studio`  | Browse the local database                                                           |
 
@@ -160,15 +174,17 @@ Reproduce with `npm run pack && node scripts/perf.mjs`, and
 
 ## Documents
 
-| Document                                     | What it is                                                            |
-| -------------------------------------------- | --------------------------------------------------------------------- |
-| [REQUIREMENTS.md](./REQUIREMENTS.md)         | **Open questions only.** §1–§5 are what still block shipping          |
-| [RELEASE.md](./RELEASE.md)                   | How to build, sign and publish a Windows or macOS update              |
-| [SPRINTS.md](./SPRINTS.md)                   | Full specification: screens, schema, IPC contract, algorithms         |
-| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md)     | Live status, decision log, known issues, test history                 |
-| [IMPROVEMENT-PLAN.md](./IMPROVEMENT-PLAN.md) | Post-Sprint-4 roadmap and the questions it still depends on           |
-| [CLAUDE.md](./CLAUDE.md)                     | Engineering rules for every coding session                            |
-| `design/`                                    | Original HTML prototypes — the feature reference, never imported from |
+| Document                                 | What it is                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| [SPRINT-TRACKER.md](./SPRINT-TRACKER.md) | **Start here:** status dashboard, known issues, test history     |
+| [docs/TASKS.md](./docs/TASKS.md)         | Every task, done and remaining, as checkboxes                    |
+| [docs/DECISIONS.md](./docs/DECISIONS.md) | Every decision with its reasoning                                |
+| [docs/ROADMAP.md](./docs/ROADMAP.md)     | What comes next                                                  |
+| [REQUIREMENTS.md](./REQUIREMENTS.md)     | **Open questions only** — what still blocks shipping             |
+| [RELEASE.md](./RELEASE.md)               | How to build, sign and publish a Windows or macOS update         |
+| [SPRINTS.md](./SPRINTS.md)               | Full specification: screens, schema, IPC contract, E2E test IDs  |
+| [CLAUDE.md](./CLAUDE.md)                 | Engineering rules for every coding session                       |
+| `design/`                                | Original HTML prototypes — the feature reference, never imported |
 
 ## Known limitations
 
@@ -176,9 +192,9 @@ Reproduce with `npm run pack && node scripts/perf.mjs`, and
   link, call and copy buttons, and interactive templates send a single-select list — but
   WhatsApp can refuse them per recipient without notice, so every interactive send falls back
   to a numbered list automatically. The message always arrives. See REQUIREMENTS §7.9.
-- **The AI escalation confidence threshold is stored but not enforced** — OpenAI returns no
-  confidence score. The screen says so rather than showing a control that does nothing.
+- **The AI escalation confidence threshold is stored but not enforced** — no AI provider
+  returns a confidence score. The keyword, message-count and time triggers all work.
 - **A message in flight during a crash may send twice**, bounded at one per device per crash.
   WhatsApp offers no deduplication primitive that would remove this.
 
-Full list, with reasoning, in [SPRINT-TRACKER.md](./SPRINT-TRACKER.md).
+Full list, with reasoning, in [SPRINT-TRACKER.md §5](./SPRINT-TRACKER.md#5-known-issues).
