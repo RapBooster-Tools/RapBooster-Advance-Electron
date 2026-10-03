@@ -14,6 +14,7 @@ import { getPrisma } from '../db/client'
 import { prepareInboxRich } from '../services/inbox-rich'
 import { refreshBadge } from '../services/desktop/notifications'
 import { waBridge } from '../wa-bridge'
+import { isHiddenPhone } from '../../../shared/phone-display'
 import { registerHandler } from './router'
 
 function parseButtons(value: string | null): TemplateButton[] | null {
@@ -54,6 +55,10 @@ function serializeMessage(row: {
 
 /** A chat's number as E.164 — chats store it with or without the plus. */
 export function chatE164(phone: string): string {
+  // NOTE: a hidden number (`<lid>@lid`) passes through untouched. Prefixing
+  // its digits with "+" would invent a phone number that may well belong to a
+  // stranger (D129).
+  if (isHiddenPhone(phone)) return phone
   return phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`
 }
 

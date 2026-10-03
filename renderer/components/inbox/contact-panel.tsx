@@ -10,6 +10,7 @@ import { useIpcEvent, useIpcQuery } from '@renderer/hooks/useIpc'
 import { cn } from '@renderer/lib/cn'
 import type { IpcResponse } from '@shared/ipc'
 import { ChatNotes } from './chat-notes'
+import { displayPhone } from '@shared/phone-display'
 
 type Profile = IpcResponse<'chat:profile'>
 type CampaignRow = Profile['campaigns'][number]
@@ -95,7 +96,7 @@ export function ContactPanel({ chatId }: { chatId: string }) {
               {p.name}
             </p>
             <p className="text-xs text-ink-muted" data-testid="profile-phone">
-              {p.phone}
+              {displayPhone(p.phone)}
             </p>
             {p.optedOut && (
               <span

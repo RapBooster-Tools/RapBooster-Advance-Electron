@@ -31,6 +31,7 @@ import type { Boom } from '@hapi/boom'
 import { rm } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { TransportEmitter } from './emitter'
+import { isLidJid, isPnJid, LidResolver, pnJidOf } from './lid'
 import { resolveLinkPreview } from '../link-preview'
 import { buttonsAsNumberedText } from '../../../shared/template-buttons'
 import type {
@@ -57,6 +58,8 @@ type Payload<K extends keyof WaRequests> = Omit<WaRequests[K], 'deviceId'>
 interface Session {
   socket: WASocket
   authDir: string
+  /** LID → phone number for this account (transport/lid.ts). */
+  lids: LidResolver
   connected: boolean
   /** Set when logout() is called, so the close handler does not fight it. */
   closing: boolean
@@ -104,34 +107,9 @@ function vcard(name: string, phone: string): string {
   ].join('\n')
 }
 
-/**
- * The sender as E.164, whenever WhatsApp tells us the phone number.
- *
- * WHY: Baileys 7 can address a chat by LID — an opaque per-user id, not a
- * phone number — and then carries the phone JID in `remoteJidAlt`. Opt-out
- * handling, reply attribution and sequence stop-on-reply all match on phone,
- * so a LID here would silently miss every one of them. In a group the sender
- * is the participant, not the group.
- */
-function senderPhone(raw: WAMessage, chatId: string): string {
-  const isPn = (jid: string | null | undefined): jid is string =>
-    typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')
-  const candidates = chatId.endsWith('@g.us')
-    ? [raw.key.participantAlt, raw.key.participant]
-    : [chatId, raw.key.remoteJidAlt]
-  const pn = candidates.find(isPn)
-  if (pn) return `+${(pn.split('@')[0] ?? '').split(':')[0] ?? ''}`
-  const fallback = candidates.find((c): c is string => typeof c === 'string') ?? chatId
-  return fallback.split('@')[0] ?? fallback
-}
-
 /** Our own JID's user part, or null before login completes. */
 function ownJid(socket: WASocket): string | null {
   return socket.user?.id ? jidNormalizedUser(socket.user.id) : null
-}
-
-function participantPhone(jid: string): string {
-  return `+${(jid.split('@')[0] ?? '').split(':')[0] ?? ''}`
 }
 
 /**
@@ -347,7 +325,23 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       syncFullHistory: false,
     })
 
-    this.sessions.set(deviceId, { socket, authDir, connected: false, closing: false })
+    // Baileys keeps every LID↔number pair it has seen in its signal store;
+    // the resolver asks it, and reports newly learned pairs so main can fix
+    // rows stored while the number was still hidden.
+    const lids = new LidResolver(
+      (missing) => socket.signalRepository.lidMapping.getPNsForLIDs(missing),
+      (mappings) => this.emit('lidMapping', deviceId, mappings),
+    )
+    this.sessions.set(deviceId, {
+      socket,
+      authDir,
+      lids,
+      connected: false,
+      closing: false,
+    })
+    socket.ev.on('lid-mapping.update', (pair) => {
+      lids.learn([pair])
+    })
     this.emit('status', deviceId, 'connecting')
 
     // Credentials must be persisted the moment they change; a dropped update
@@ -401,24 +395,35 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       }
     })
 
+    // Resolving a LID can wait on the signal store; chaining keeps messages
+    // in the order WhatsApp delivered them.
+    let inbound = Promise.resolve()
     socket.ev.on('messages.upsert', ({ messages, type }) => {
       if (type !== 'notify') return
-      for (const raw of messages) {
-        if (raw.key.fromMe) continue
-        const parsed = this.parseIncoming(raw)
-        if (parsed) this.emit('message', deviceId, parsed)
-      }
+      inbound = inbound.then(async () => {
+        for (const raw of messages) {
+          if (raw.key.fromMe) continue
+          try {
+            const parsed = await this.parseIncoming(raw, lids)
+            if (parsed) this.emit('message', deviceId, parsed)
+          } catch (err) {
+            console.error(`could not read an incoming message on ${deviceId}`, err)
+          }
+        }
+      })
     })
 
     socket.ev.on('call', (calls) => {
       for (const call of calls) {
         // Only the offer matters: that is the moment a reject is still possible.
         if (call.status !== 'offer') continue
-        this.emit('call', deviceId, {
-          callId: call.id,
-          from: call.callerPn ?? call.from,
-          isVideo: call.isVideo ?? false,
-        })
+        void lids.phoneOrHidden(call.from, call.callerPn).then((from) =>
+          this.emit('call', deviceId, {
+            callId: call.id,
+            from,
+            isVideo: call.isVideo ?? false,
+          }),
+        )
       }
     })
 
@@ -426,49 +431,58 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     // history sync, then upserts and updates. Only entries with a real phone
     // number are useful to the grabber; a LID-only entry cannot be messaged by
     // number, so it is kept only when WhatsApp told us its phone number.
-    const lidToPn = new Map<string, string>()
-    const phoneOf = (...jids: Array<string | null | undefined>): string | null => {
-      for (const j of jids) {
-        if (typeof j !== 'string') continue
-        const pn = j.endsWith('@lid') ? lidToPn.get(j) : j
-        if (!pn?.endsWith('@s.whatsapp.net')) continue
-        const digits = (pn.split('@')[0] ?? '').split(':')[0] ?? ''
-        if (digits.length >= 7) return digits
-      }
-      return null
-    }
     const emitSynced = (synced: WaSyncedContact[]) => {
       if (synced.length > 0) this.emit('contacts', deviceId, synced)
     }
-    const forwardContacts = (raw: Array<Partial<Contact>>) =>
+    const forwardContacts = async (raw: Array<Partial<Contact>>) => {
+      // Every pair a contact carries is a mapping worth keeping, whether or
+      // not the contact itself is forwarded.
+      lids.learn(
+        raw.flatMap((c) => [
+          { lid: c.lid, pn: c.phoneNumber },
+          { lid: c.id, pn: c.phoneNumber },
+        ]),
+      )
+      await lids.prefetch(raw.map((c) => c.id))
       emitSynced(
         raw.flatMap((c) => {
-          const digits = phoneOf(c.phoneNumber, c.id)
-          if (!digits) return []
+          const phone =
+            (c.phoneNumber ? lids.knownPhone(c.phoneNumber) : null) ??
+            (c.id ? lids.knownPhone(c.id) : null)
+          if (!phone) return []
           return [
             {
-              jid: `${digits}@s.whatsapp.net`,
-              phone: `+${digits}`,
+              jid: pnJidOf(phone),
+              phone,
               name: c.name ?? c.notify ?? c.verifiedName ?? null,
               source: 'addressBook' as const,
             },
           ]
         }),
       )
+    }
     // WHY chats too: the address book misses everyone who messaged the user
     // without being saved — often exactly the leads a business wants.
-    const forwardChats = (raw: Array<Partial<Chat>>) =>
+    const forwardChats = async (raw: Array<Partial<Chat>>) => {
+      // Groups, broadcast lists, Status and channels are not people.
+      const people = raw.filter((c) => isPnJid(c.id) || isLidJid(c.id))
+      lids.learn(
+        people.map((c) => ({
+          lid: c.lidJid ?? (isLidJid(c.id) ? c.id : undefined),
+          pn: c.pnJid ?? (isPnJid(c.id) ? c.id : undefined),
+        })),
+      )
+      await lids.prefetch(people.map((c) => c.id))
       emitSynced(
-        raw.flatMap((c) => {
-          // Groups, broadcast lists, Status and channels are not people.
-          if (!c.id || !/@(s\.whatsapp\.net|lid)$/.test(c.id)) return []
-          const digits = phoneOf(c.pnJid, c.id)
-          if (!digits) return []
+        people.flatMap((c) => {
+          const phone =
+            (c.pnJid ? lids.knownPhone(c.pnJid) : null) ?? lids.knownPhone(c.id!)
+          if (!phone) return []
           const ts = c.conversationTimestamp ? Number(c.conversationTimestamp) : 0
           return [
             {
-              jid: `${digits}@s.whatsapp.net`,
-              phone: `+${digits}`,
+              jid: pnJidOf(phone),
+              phone,
               name: c.name ?? c.displayName ?? null,
               source: 'chat' as const,
               lastChatAt: ts > 0 ? new Date(ts * 1000).toISOString() : null,
@@ -476,14 +490,23 @@ export class BaileysTransport extends TransportEmitter implements Transport {
           ]
         }),
       )
+    }
+    const logFailure = (what: string) => (err: unknown) =>
+      console.warn(`could not read synced ${what} on ${deviceId}`, err)
     socket.ev.on('messaging-history.set', ({ contacts, chats, lidPnMappings }) => {
-      for (const m of lidPnMappings ?? []) lidToPn.set(m.lid, m.pn)
-      forwardContacts(contacts)
-      forwardChats(chats)
+      lids.learn(lidPnMappings ?? [])
+      void forwardContacts(contacts).catch(logFailure('contacts'))
+      void forwardChats(chats).catch(logFailure('chats'))
     })
-    socket.ev.on('contacts.upsert', (contacts) => forwardContacts(contacts))
-    socket.ev.on('contacts.update', (contacts) => forwardContacts(contacts))
-    socket.ev.on('chats.upsert', (chats) => forwardChats(chats))
+    socket.ev.on('contacts.upsert', (contacts) => {
+      void forwardContacts(contacts).catch(logFailure('contacts'))
+    })
+    socket.ev.on('contacts.update', (contacts) => {
+      void forwardContacts(contacts).catch(logFailure('contacts'))
+    })
+    socket.ev.on('chats.upsert', (chats) => {
+      void forwardChats(chats).catch(logFailure('chats'))
+    })
 
     socket.ev.on('labels.edit', (label) => {
       this.emit('label', deviceId, {
@@ -497,11 +520,14 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     socket.ev.on('labels.association', ({ association, type }) => {
       // Message-level labels have no equivalent in our model; chats map to tags.
       if (!('chatId' in association) || 'messageId' in association) return
-      this.emit('labelAssociation', deviceId, {
-        labelId: association.labelId,
-        chatJid: association.chatId,
-        action: type,
-      })
+      // Chats are filed under the number when it is known; so must this be.
+      void lids.chatJid(association.chatId).then((chatJid) =>
+        this.emit('labelAssociation', deviceId, {
+          labelId: association.labelId,
+          chatJid,
+          action: type,
+        }),
+      )
     })
 
     socket.ev.on('messages.update', (updates) => {
@@ -516,10 +542,24 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     })
   }
 
-  private parseIncoming(raw: WAMessage): IncomingMessage | null {
+  private async parseIncoming(
+    raw: WAMessage,
+    lids: LidResolver,
+  ): Promise<IncomingMessage | null> {
     const id = raw.key.id
-    const chatId = raw.key.remoteJid
-    if (!id || !chatId) return null
+    const remoteJid = raw.key.remoteJid
+    if (!id || !remoteJid) return null
+    const isGroup = remoteJid.endsWith('@g.us')
+    // A one-to-one chat is filed under the phone number whenever WhatsApp
+    // gave us one (the key's alt JID, or a learned mapping), so the same
+    // person is one chat however WhatsApp chose to address them.
+    const chatId = isGroup
+      ? remoteJid
+      : await lids.chatJid(remoteJid, raw.key.remoteJidAlt)
+    // In a group the sender is the participant; elsewhere the chat itself.
+    const from = isGroup
+      ? await lids.phoneOrHidden(raw.key.participant, raw.key.participantAlt)
+      : await lids.phoneOrHidden(remoteJid, raw.key.remoteJidAlt)
 
     const content = (raw.message ?? {}) as Record<string, unknown>
     const text =
@@ -600,9 +640,9 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     return {
       id,
       chatId,
-      from: senderPhone(raw, chatId),
+      from,
       pushName: raw.pushName ?? null,
-      isGroup: chatId.endsWith('@g.us'),
+      isGroup,
       type,
       body,
       fileName,
@@ -849,6 +889,12 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     }
   }
 
+  private lidsFor(deviceId: string): LidResolver {
+    const session = this.sessions.get(deviceId)
+    if (!session) throw new Error(`no session for device ${deviceId}`)
+    return session.lids
+  }
+
   private socketFor(deviceId: string): WASocket {
     const session = this.sessions.get(deviceId)
     if (!session?.connected) throw new Error(`device ${deviceId} is not connected`)
@@ -917,16 +963,37 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     )
   }
 
-  private toMetadata(
+  /**
+   * Members' phone numbers. A LID-addressed group lists members by LID, with
+   * the number alongside only when WhatsApp shares it; an unresolved member
+   * gets the hidden stand-in, never the LID's digits dressed up as a number.
+   */
+  private async memberPhones(
+    lids: LidResolver,
+    members: Array<{ id: string; lid?: string; phoneNumber?: string }>,
+  ): Promise<string[]> {
+    lids.learn(
+      members.flatMap((m) => [
+        { lid: m.lid, pn: m.phoneNumber },
+        { lid: m.id, pn: m.phoneNumber },
+      ]),
+    )
+    await lids.prefetch(members.map((m) => m.id))
+    return Promise.all(members.map((m) => lids.phoneOrHidden(m.id, m.phoneNumber)))
+  }
+
+  private async toMetadata(
+    deviceId: string,
     group: Awaited<ReturnType<WASocket['groupMetadata']>>,
-  ): GroupMetadata {
+  ): Promise<GroupMetadata> {
+    const phones = await this.memberPhones(this.lidsFor(deviceId), group.participants)
     return {
       id: group.id,
       name: group.subject,
       description: group.desc ?? null,
-      participants: group.participants.map((p) => ({
+      participants: group.participants.map((p, i) => ({
         jid: p.id,
-        phone: participantPhone(p.phoneNumber ?? p.id),
+        phone: phones[i]!,
         isAdmin: p.admin === 'admin' || p.admin === 'superadmin',
       })),
       announce: group.announce ?? false,
@@ -939,7 +1006,7 @@ export class BaileysTransport extends TransportEmitter implements Transport {
 
   async groupMetadata(deviceId: string, groupId: string): Promise<GroupMetadata> {
     const socket = this.socketFor(deviceId)
-    return this.toMetadata(await socket.groupMetadata(groupId))
+    return this.toMetadata(deviceId, await socket.groupMetadata(groupId))
   }
 
   async groupInviteCode(deviceId: string, groupId: string): Promise<string> {
@@ -984,17 +1051,24 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     deviceId: string,
     groupId: string,
   ): Promise<WaResponses['group:requests']> {
-    const raw = await this.socketFor(deviceId).groupRequestParticipantsList(groupId)
+    const raw = (
+      await this.socketFor(deviceId).groupRequestParticipantsList(groupId)
+    ).filter((r) => typeof r.jid === 'string')
+    const phones = await this.memberPhones(
+      this.lidsFor(deviceId),
+      raw.map((r) => ({
+        id: r.jid!,
+        ...(r.phone_number ? { phoneNumber: r.phone_number } : {}),
+      })),
+    )
     return {
-      requests: raw
-        .filter((r) => typeof r.jid === 'string')
-        .map((r) => ({
-          jid: r.jid!,
-          phone: participantPhone(r.phone_number ?? r.jid!),
-          requestedAt: r.request_time
-            ? new Date(Number(r.request_time) * 1000).toISOString()
-            : null,
-        })),
+      requests: raw.map((r, i) => ({
+        jid: r.jid!,
+        phone: phones[i]!,
+        requestedAt: r.request_time
+          ? new Date(Number(r.request_time) * 1000).toISOString()
+          : null,
+      })),
     }
   }
 
@@ -1186,6 +1260,14 @@ export class BaileysTransport extends TransportEmitter implements Transport {
     // on +9198765432100 would have been read as us on +919876543210, silently
     // reporting the wrong admin rights for that group.
     const own = session.socket.user?.id ? jidNormalizedUser(session.socket.user.id) : null
+    // A LID-addressed group lists us by our LID, not our number.
+    const ownLid = session.socket.user?.lid
+      ? jidNormalizedUser(session.socket.user.lid)
+      : null
+    const isUs = (p: { id: string; phoneNumber?: string }) =>
+      [p.id, p.phoneNumber].some(
+        (j) => typeof j === 'string' && [own, ownLid].includes(jidNormalizedUser(j)),
+      )
     const all = await session.socket.groupFetchAllParticipating()
 
     return Object.values(all).map((group) => ({
@@ -1196,9 +1278,7 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       isAdmin:
         own !== null &&
         group.participants.some(
-          (p) =>
-            jidNormalizedUser(p.id) === own &&
-            (p.admin === 'admin' || p.admin === 'superadmin'),
+          (p) => isUs(p) && (p.admin === 'admin' || p.admin === 'superadmin'),
         ),
     }))
   }

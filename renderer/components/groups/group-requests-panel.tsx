@@ -5,6 +5,7 @@ import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import type { GroupRow } from './shared'
+import { displayPhone } from '@shared/phone-display'
 
 /** Pending join requests (groups with join approval on). */
 export function GroupRequestsPanel({
@@ -85,7 +86,7 @@ export function GroupRequestsPanel({
             data-testid="join-request"
             className="flex items-center gap-2 border-b border-line py-1.5 text-sm last:border-b-0"
           >
-            <span className="flex-1 truncate">{r.phone}</span>
+            <span className="flex-1 truncate">{displayPhone(r.phone)}</span>
             <Button
               size="sm"
               variant="primary"

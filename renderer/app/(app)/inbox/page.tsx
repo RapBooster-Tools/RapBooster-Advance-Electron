@@ -17,6 +17,7 @@ import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState } from '@renderer/components/ui/empty-state'
 import { useIpcEvent, useIpcQuery } from '@renderer/hooks/useIpc'
+import { displayPhone } from '@shared/phone-display'
 
 /** Opened from a notification or another screen: `/inbox?chat=<chatId>`. */
 function useDeepLinkedChat(select: (chatId: string) => void) {
@@ -190,9 +191,9 @@ function Inbox() {
                     className="truncate text-sm font-semibold text-ink"
                     data-testid="chat-name"
                   >
-                    {active.name}
+                    {displayPhone(active.name)}
                   </p>
-                  <p className="text-xs text-ink-muted">{active.phone}</p>
+                  <p className="text-xs text-ink-muted">{displayPhone(active.phone)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {active.isEscalated && (

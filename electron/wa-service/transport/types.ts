@@ -81,6 +81,8 @@ export interface TransportEvents {
     association: { labelId: string; chatJid: string; action: 'add' | 'remove' },
   ) => void
   contacts: (deviceId: string, contacts: WaSyncedContact[]) => void
+  /** LID → phone pairs learned after the fact, so main can repair stored rows. */
+  lidMapping: (deviceId: string, mappings: Array<{ lid: string; phone: string }>) => void
 }
 
 type Payload<K extends keyof WaRequests> = Omit<WaRequests[K], 'deviceId'>

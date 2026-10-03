@@ -108,6 +108,9 @@ async function main(): Promise<void> {
   transport.on('contacts', (deviceId, contacts) =>
     emit('contacts', { deviceId, contacts }),
   )
+  transport.on('lidMapping', (deviceId, mappings) =>
+    emit('lidMapping', { deviceId, mappings }),
+  )
 
   async function handle<K extends WaRequestKind>(
     envelope: WaRequestEnvelope<K>,

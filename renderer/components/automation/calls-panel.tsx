@@ -7,6 +7,7 @@ import { StatusPill } from '@renderer/components/ui/status-pill'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import type { IpcResponse } from '@shared/ipc'
 import { formatWhen, INPUT_CLASS } from './field'
+import { displayPhone } from '@shared/phone-display'
 
 type CallConfig = IpcResponse<'calls:getConfig'>
 
@@ -99,7 +100,9 @@ export function CallsPanel() {
             <tbody>
               {(calls.data ?? []).map((c) => (
                 <tr key={c.id} className="border-t border-line" data-testid="call-row">
-                  <td className="py-1.5 font-mono text-xs text-ink">{c.from}</td>
+                  <td className="py-1.5 font-mono text-xs text-ink">
+                    {displayPhone(c.from)}
+                  </td>
                   <td className="py-1.5 text-ink">{deviceName.get(c.deviceId) ?? '—'}</td>
                   <td className="py-1.5 text-ink-muted">
                     {c.isVideo ? 'Video' : 'Voice'}

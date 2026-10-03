@@ -347,6 +347,14 @@ export interface WaEvents {
     deviceId: string
     contacts: WaSyncedContact[]
   }
+  /**
+   * A person's phone number became known for a LID (`<id>@lid`) — rows stored
+   * with the hidden stand-in, or filed under the LID, can now be corrected.
+   */
+  lidMapping: {
+    deviceId: string
+    mappings: Array<{ lid: string; phone: string }>
+  }
   /** Emitted after the reconnect budget is exhausted, so main can inform the user. */
   giveUp: { deviceId: string; attempts: number; detail: string }
   log: { level: 'info' | 'warn' | 'error'; message: string }

@@ -7,6 +7,7 @@ import { OptOutImport } from '@renderer/components/contacts/optout-import'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcEvent } from '@renderer/hooks/useIpc'
+import { displayPhone } from '@shared/phone-display'
 
 type Suppression = IpcResponse<'suppression:list'>['items'][number]
 
@@ -181,7 +182,7 @@ export function OptOutPanel() {
                 className="flex items-center gap-3 border-b border-line px-4 py-1.5 text-sm"
               >
                 <span className="w-40 shrink-0 font-mono text-xs text-ink">
-                  {row.phone}
+                  {displayPhone(row.phone)}
                 </span>
                 <span className="w-32 shrink-0 text-xs text-ink-muted">
                   {SOURCE_LABELS[row.source]}

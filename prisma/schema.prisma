@@ -403,6 +403,8 @@ model Chat {
   flowState FlowSession?
 
   @@index([deviceId, lastMessageAt])
+  /// LID repair finds a person's existing chat by number (services/lid-repair.ts).
+  @@index([phone])
 }
 
 model Message {

@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@renderer/lib/cn'
 import { ChatFilterTabs, type ChatFilter } from './chat-filter-tabs'
 import type { InboxChat } from './inbox-types'
+import { displayPhone } from '@shared/phone-display'
 
 /** The left column: search, device filter, filter tabs and the conversations. */
 export function ChatList({
@@ -71,7 +72,9 @@ export function ChatList({
               )}
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-medium text-ink">{chat.name}</span>
+                <span className="truncate text-sm font-medium text-ink">
+                  {displayPhone(chat.name)}
+                </span>
                 {chat.unreadCount > 0 && (
                   <span
                     className="shrink-0 rounded-full bg-primary px-1.5 text-xs text-on-primary"
@@ -82,7 +85,9 @@ export function ChatList({
                 )}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="truncate text-xs text-ink-muted">{chat.phone}</span>
+                <span className="truncate text-xs text-ink-muted">
+                  {displayPhone(chat.phone)}
+                </span>
                 {chat.pendingDrafts > 0 && (
                   <span
                     className="shrink-0 rounded bg-status-warn-bg px-1.5 text-[10px] text-status-warn-fg"

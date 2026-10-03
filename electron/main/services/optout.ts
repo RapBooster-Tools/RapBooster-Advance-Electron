@@ -11,6 +11,7 @@ import { waBridge } from '../wa-bridge'
 import type { InboundContext } from './inbound'
 import { notify } from './notify'
 import { emitWebhook } from './webhooks'
+import { isHiddenPhone } from '../../../shared/phone-display'
 
 /** Which of these E.164 numbers are suppressed. One query, any batch size ≤ 1,000. */
 export async function suppressedPhones(phones: string[]): Promise<Set<string>> {
@@ -234,7 +235,11 @@ async function optIn(ctx: InboundContext): Promise<boolean> {
  * not an opt-out, and treating it as one would silently drop a customer.
  */
 export async function handleOptOut(ctx: InboundContext): Promise<boolean> {
-  if (ctx.isGroup || !E164.test(ctx.phone) || !ctx.text) return false
+  // WHY hidden numbers too: a STOP must be honoured even before WhatsApp has
+  // shown us the number. It is stored against the LID stand-in and moves to
+  // the real number when the mapping arrives (services/lid-repair.ts).
+  if (ctx.isGroup || !ctx.text) return false
+  if (!E164.test(ctx.phone) && !isHiddenPhone(ctx.phone)) return false
   const text = ctx.text.trim().toLowerCase()
   if (text === '') return false
 

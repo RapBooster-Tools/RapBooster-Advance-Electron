@@ -59,6 +59,7 @@ import { heldDraftTick } from './services/ai/drafts'
 import { scheduledMessageTick } from './services/scheduled-messages'
 import { flowTick } from './services/flows/engine'
 import { persistWaContacts, recordChatContact } from './services/wa-contacts'
+import { applyLidMappings } from './services/lid-repair'
 import {
   attachWindow,
   initDesktop,
@@ -67,6 +68,7 @@ import {
 } from './services/desktop'
 import { emitToAll } from './ipc/router'
 import { windowBackground } from './window-background'
+import { displayPhone } from '../../shared/phone-display'
 import { waBridge } from './wa-bridge'
 import { campaignEngine } from './services/campaign-engine'
 import { groupRunner } from './services/group-runner'
@@ -310,7 +312,7 @@ function startWaService(): void {
         emitToAll(windows(), 'message:received', { chatId: saved.chatId, message: saved })
         notifyIncoming({
           chatId: saved.chatId,
-          chatName: message.pushName ?? message.from,
+          chatName: message.pushName ?? displayPhone(message.from),
           preview: saved.body,
           isGroup: message.isGroup,
         })
@@ -374,6 +376,13 @@ function startWaService(): void {
   waBridge.on('contacts', ({ deviceId, contacts }) => {
     void persistWaContacts(deviceId, contacts).catch((err: unknown) =>
       console.error('could not store synced WhatsApp contacts', err),
+    )
+  })
+
+  // WhatsApp revealed the number behind a LID: move hidden-number rows onto it.
+  waBridge.on('lidMapping', ({ deviceId, mappings }) => {
+    void applyLidMappings(deviceId, mappings).catch((err: unknown) =>
+      console.error('could not apply LID → number mappings', err),
     )
   })
 

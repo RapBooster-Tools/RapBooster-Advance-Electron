@@ -6,6 +6,7 @@ import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import { inputClass, splitPhones, type GroupRow } from './shared'
+import { displayPhone } from '@shared/phone-display'
 
 /** Rendering thousands of rows in a dialog is pointless; search narrows it. */
 const VISIBLE_MEMBERS = 200
@@ -210,7 +211,7 @@ export function GroupMembersPanel({
               data-testid="member-row"
               className="flex items-center gap-2 border-b border-line px-2.5 py-1.5 text-sm last:border-b-0"
             >
-              <span className="flex-1 truncate">{m.phone}</span>
+              <span className="flex-1 truncate">{displayPhone(m.phone)}</span>
               {m.isAdmin && <span className="text-xs text-ink-muted">admin</span>}
               <Button
                 size="sm"

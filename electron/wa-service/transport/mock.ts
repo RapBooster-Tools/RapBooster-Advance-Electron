@@ -24,6 +24,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { TransportEmitter } from './emitter'
+import { hiddenPhone, LidResolver, normalLid, pnJidOf, userOf } from './lid'
 import type {
   GroupMetadata,
   OutgoingMessage,
@@ -103,7 +104,18 @@ const jidOf = (phone: string): string => `${phone.replace(/^\+/, '')}@s.whatsapp
 const phoneOf = (jid: string): string => `+${jid.split('@')[0]?.split(':')[0] ?? ''}`
 
 interface InjectedEvent {
-  type: 'message' | 'call' | 'label' | 'labelAssociation' | 'receipt' | 'drop'
+  type:
+    'message' | 'call' | 'label' | 'labelAssociation' | 'receipt' | 'drop' | 'lidMapping'
+  /**
+   * Address the sender by this LID (`<id>@lid`) instead of their number, the
+   * way WhatsApp now often does. With `alt: true` the message also carries the
+   * number (Baileys' `remoteJidAlt`); with `stored: true` the account's mapping
+   * store already knows it; with neither, the number stays hidden until a
+   * `lidMapping` event reveals it.
+   */
+  lid?: string
+  alt?: boolean
+  stored?: boolean
   /** A device id, or "*" for the first connected device. */
   deviceId?: string
   from?: string
@@ -126,6 +138,10 @@ interface MockSession {
   connected: boolean
   phone: string
   sent: number
+  /** The same resolver the Baileys transport uses, over a fake mapping store. */
+  lids: LidResolver
+  /** Stands in for Baileys' signal-store mapping: lid user → phone JID. */
+  lidStore: Map<string, string>
 }
 
 export class MockTransport extends TransportEmitter implements Transport {
@@ -182,6 +198,10 @@ export class MockTransport extends TransportEmitter implements Transport {
     if (!deviceId) return
     switch (event.type) {
       case 'message':
+        if (event.lid) {
+          void this.simulateLidIncoming(deviceId, event)
+          return
+        }
         this.simulateIncoming(
           deviceId,
           event.body ?? '',
@@ -190,12 +210,28 @@ export class MockTransport extends TransportEmitter implements Transport {
           event.isGroup ?? false,
         )
         return
-      case 'call':
-        this.emit('call', deviceId, {
-          callId: this.nextId('call'),
-          from: event.from ?? '+919999000011',
-          isVideo: event.isVideo ?? false,
-        })
+      case 'call': {
+        const session = this.sessions.get(deviceId)
+        const from =
+          event.lid && session
+            ? session.lids.phoneOrHidden(event.lid)
+            : Promise.resolve(event.from ?? '+919999000011')
+        void from.then((caller) =>
+          this.emit('call', deviceId, {
+            callId: this.nextId('call'),
+            from: caller,
+            isVideo: event.isVideo ?? false,
+          }),
+        )
+        return
+      }
+      case 'lidMapping':
+        // WhatsApp revealing the number later (Baileys' lid-mapping.update).
+        if (event.lid && event.from) {
+          this.sessions
+            .get(deviceId)
+            ?.lids.learn([{ lid: event.lid, pn: pnJidOf(event.from) }])
+        }
         return
       case 'label':
         this.emit('label', deviceId, {
@@ -303,11 +339,21 @@ export class MockTransport extends TransportEmitter implements Transport {
     // on-disk layout identical between mock and production runs.
     mkdirSync(authDir, { recursive: true })
 
+    const lidStore = new Map<string, string>()
     const session: MockSession = {
       deviceId,
       connected: false,
       phone: this.phoneFor(deviceId),
       sent: 0,
+      lidStore,
+      lids: new LidResolver(
+        async (lids) =>
+          lids.flatMap((lid) => {
+            const pn = lidStore.get(userOf(lid))
+            return pn ? [{ lid, pn }] : []
+          }),
+        (mappings) => this.emit('lidMapping', deviceId, mappings),
+      ),
     }
     this.sessions.set(deviceId, session)
 
@@ -813,6 +859,35 @@ export class MockTransport extends TransportEmitter implements Transport {
       isGroup,
       type,
       body,
+      fileName: null,
+      fileSize: null,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  /**
+   * An inbound message addressed by LID, resolved exactly as the Baileys
+   * transport resolves one (transport/lid.ts).
+   */
+  private async simulateLidIncoming(
+    deviceId: string,
+    event: InjectedEvent,
+  ): Promise<void> {
+    const session = this.sessions.get(deviceId)
+    if (!session || !event.lid) return
+    if (event.stored && event.from)
+      session.lidStore.set(userOf(event.lid), pnJidOf(event.from))
+    const alt = event.alt && event.from ? pnJidOf(event.from) : undefined
+    const phone = await session.lids.phoneOf(event.lid, alt)
+    this.emit('message', deviceId, {
+      id: this.nextId('in'),
+      // The mock files chats as `<+E.164>@s.whatsapp.net` (simulateIncoming).
+      chatId: phone ? `${phone}@s.whatsapp.net` : normalLid(event.lid),
+      from: phone ?? hiddenPhone(event.lid),
+      pushName: event.name ?? 'Mock Contact',
+      isGroup: false,
+      type: event.messageType ?? 'text',
+      body: event.body ?? '',
       fileName: null,
       fileSize: null,
       timestamp: new Date().toISOString(),
