@@ -196,7 +196,7 @@ Customer decisions D122–D125 (2026-10-03). Test IDs are assigned when each spe
 - [ ] **T-1306** ⬜ Scheduled messages per chat — _Inbox agent_ · D124
 - [ ] **T-1307** ⬜ Visual chatbot flow builder — _Automation agent_ · D125
 - [ ] **T-1308** ⬜ Welcome and away messages — _Automation agent_ · D125
-- [ ] **T-1309** ⬜ WhatsApp contacts grabber (save chats and contacts to a list) — _Audience agent_ · D125
+- [ ] **T-1309** 🟡 WhatsApp contacts grabber: address book **and chats** (incl. unsaved numbers) to a list — _Contacts agent_ · D125, D128 — foundation on main (e893e33)
 - [ ] **T-1310** ⬜ Excel (.xlsx) and vCard (.vcf) import — _Audience agent_ · D125
 - [ ] **T-1311** ⬜ Native file picker wired everywhere a path is typed today (contacts CSV, opt-out import, template media, voice, sticker, restore) — _Coordinator_ · D96
 - [ ] **T-1312** ⬜ First-run setup wizard: link a device → import contacts → first template → first campaign — _Help agent_ · D123

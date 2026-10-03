@@ -20,7 +20,7 @@ Rules: [CLAUDE.md](../CLAUDE.md) · Spec: [SPRINTS.md](../SPRINTS.md)
 
 | Area                                                                          | Entries                                                                                         |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D127                                                                |
+| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128                                                                |
 | [Architecture](#architecture)                                                 | D2–D4, D13–D16, D18, D31–D34, D39, D40, D42, D89, D93, D94                                      |
 | [WhatsApp and anti-ban](#whatsapp-and-anti-ban)                               | D6, D7, D45, D49, D61, D63, D68, D70, D71, D76, D77, D95, D97, D99, D100, D107, D109–D111, D116 |
 | [Data](#data)                                                                 | D5, D8, D35–D37, D41, D43, D50, D73, D74, D90, D112, D113, D115                                 |
@@ -91,6 +91,13 @@ Decisions the customer made. Code follows them; they change only on a new custom
   72-hour reply attribution; "read" shown as a lower bound; static tags first; AI caps 500 per
   device and 20 per chat per day; approve-before-send off; tokens plus an editable price; AI
   replies held during quiet hours. _Then:_ these are the shipped defaults.
+- **D128** · 2026-10-03 · Accepted — The contacts grabber fetches from WhatsApp **chats** as
+  well as the address book, with a source filter (everyone / saved contacts / chats). _Why:_
+  customer instruction; the address book misses everyone who messaged the user without being
+  saved, often the leads a business most wants. _Then:_ Baileys forwards history-sync and
+  upserted 1:1 chats (LID chats kept only when WhatsApp supplies the phone mapping), the inbox
+  records every inbound 1:1 chat, and `WaContact` carries `inAddressBook`, `hasChat`,
+  `lastChatAt` (additive migration `20261003110000`).
 
 ## Architecture
 
