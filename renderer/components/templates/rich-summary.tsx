@@ -6,7 +6,7 @@ import { formatPrice } from './product-picker'
 
 type Template = IpcResponse<'template:list'>[number]
 
-const BOX = 'mb-1 rounded bg-black/5 px-2 py-2 text-xs text-ink-muted'
+const BOX = 'mb-1 rounded bg-ink/5 px-2 py-2 text-xs text-ink-muted'
 
 function when(iso: string): string {
   const date = new Date(iso)

@@ -74,7 +74,7 @@ export function ChatList({
                 <span className="truncate text-sm font-medium text-ink">{chat.name}</span>
                 {chat.unreadCount > 0 && (
                   <span
-                    className="shrink-0 rounded-full bg-primary px-1.5 text-xs text-white"
+                    className="shrink-0 rounded-full bg-primary px-1.5 text-xs text-on-primary"
                     data-testid="unread-badge"
                   >
                     {chat.unreadCount}

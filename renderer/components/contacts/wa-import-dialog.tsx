@@ -192,7 +192,7 @@ export function WaImportDialog({
                     className={cn(
                       'rounded-control px-3 py-1 text-xs',
                       source === s.value
-                        ? 'bg-primary font-medium text-white'
+                        ? 'bg-primary font-medium text-on-primary'
                         : 'border border-line text-ink-muted hover:bg-wa-in',
                     )}
                   >

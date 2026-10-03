@@ -40,7 +40,7 @@ export default function AutomationPage() {
             className={cn(
               'rounded-t-control px-3 py-1.5 text-sm',
               tab === t.id
-                ? 'bg-primary font-medium text-white'
+                ? 'bg-primary font-medium text-on-primary'
                 : 'text-ink-muted hover:bg-wa-in hover:text-ink',
             )}
           >

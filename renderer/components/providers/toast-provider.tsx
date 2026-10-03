@@ -19,11 +19,13 @@ interface Toast {
   message: string
 }
 
+// NOTE: toasts float over arbitrary content, so every tone is opaque — a
+// translucent tint over a busy table is unreadable.
 const TONES: Record<Level, string> = {
-  info: 'bg-surface border-line text-ink',
-  success: 'bg-status-ok-bg border-status-ok-fg/20 text-status-ok-fg',
-  warning: 'bg-status-warn-bg border-status-warn-fg/20 text-status-warn-fg',
-  error: 'bg-danger/10 border-danger/20 text-danger',
+  info: 'bg-surface-raised border-line text-ink',
+  success: 'bg-status-ok-bg border-status-ok-fg/25 text-status-ok-fg',
+  warning: 'bg-status-warn-bg border-status-warn-fg/25 text-status-warn-fg',
+  error: 'bg-surface-raised border-danger/40 text-danger',
 }
 
 const ToastContext = createContext<(level: Level, message: string) => void>(() => {})
@@ -77,7 +79,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             onClick={() => dismiss(toast.id)}
             data-testid="toast"
             className={cn(
-              'pointer-events-auto rounded-card border px-3 py-2 text-left text-sm shadow-sm',
+              'pointer-events-auto animate-slide-up rounded-card border px-3.5 py-2.5 text-left text-sm font-medium shadow-raised',
               TONES[toast.level],
             )}
           >

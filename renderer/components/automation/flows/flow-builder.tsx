@@ -183,7 +183,7 @@ export function FlowBuilder({
                 className={cn(
                   'flex-1 rounded-control px-3 py-1.5 text-sm',
                   side === s
-                    ? 'bg-primary font-medium text-white'
+                    ? 'bg-primary font-medium text-on-primary'
                     : 'text-ink-muted hover:bg-wa-in',
                 )}
               >

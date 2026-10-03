@@ -30,7 +30,9 @@ export function ChatFilterTabs({
           onClick={() => onChange(tab)}
           className={cn(
             'flex-1 rounded-control px-2 py-1 text-xs font-medium',
-            value === tab ? 'bg-primary text-white' : 'text-ink-muted hover:bg-wa-in',
+            value === tab
+              ? 'bg-primary text-on-primary'
+              : 'text-ink-muted hover:bg-wa-in',
           )}
         >
           {label}
