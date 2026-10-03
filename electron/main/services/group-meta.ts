@@ -10,6 +10,7 @@
 import type { WaGroupMetadata } from '../../../shared/wa-protocol'
 import { getPrisma } from '../db/client'
 import { waBridge } from '../wa-bridge'
+import { isHiddenPhone } from '../../../shared/phone-display'
 
 /** Settings applied to every group a bulk-create job makes. */
 export interface CreateSettings {
@@ -24,6 +25,8 @@ export function phoneDigits(value: string): string {
 }
 
 export function phoneJid(phone: string): string {
+  // A hidden number is already a JID (the LID); its digits are not a number.
+  if (isHiddenPhone(phone)) return phone
   return `${phoneDigits(phone)}@s.whatsapp.net`
 }
 

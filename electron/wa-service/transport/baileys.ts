@@ -310,6 +310,16 @@ function tappedReply(content: Record<string, unknown>): string | null {
   )
 }
 
+/**
+ * The JID each pending call offer came from, by call id. Bounded: a reject is
+ * only possible while the phone rings, so old entries are useless.
+ */
+const callers = new Map<string, string>()
+function rememberCaller(callId: string, jid: string): void {
+  callers.set(callId, jid)
+  while (callers.size > 200) callers.delete(callers.keys().next().value!)
+}
+
 export class BaileysTransport extends TransportEmitter implements Transport {
   private readonly sessions = new Map<string, Session>()
 
@@ -417,6 +427,9 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       for (const call of calls) {
         // Only the offer matters: that is the moment a reject is still possible.
         if (call.status !== 'offer') continue
+        // rejectCall must address the caller exactly as the offer did (often a
+        // LID); main only ever sees the number, so the original is kept here.
+        rememberCaller(call.id, call.from)
         void lids.phoneOrHidden(call.from, call.callerPn).then((from) =>
           this.emit('call', deviceId, {
             callId: call.id,
@@ -1245,7 +1258,8 @@ export class BaileysTransport extends TransportEmitter implements Transport {
   }
 
   async rejectCall(deviceId: string, callId: string, from: string): Promise<void> {
-    await this.socketFor(deviceId).rejectCall(callId, from)
+    await this.socketFor(deviceId).rejectCall(callId, callers.get(callId) ?? toJid(from))
+    callers.delete(callId)
   }
 
   async fetchGroups(deviceId: string): Promise<RemoteGroup[]> {

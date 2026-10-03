@@ -10,6 +10,7 @@ import { waBridge } from '../wa-bridge'
 import { isSuppressed } from './optout'
 import { isParkingError } from './sending-policy'
 import { emitWebhook } from './webhooks'
+import { isHiddenPhone } from '../../../shared/phone-display'
 
 export const DEFAULT_CALL_MESSAGE =
   "Sorry, we can't take calls on this number. Please send us a message and we'll reply here."
@@ -53,6 +54,8 @@ export async function writeCallConfig(config: CallConfig): Promise<void> {
 
 /** "+9198…" from a phone or a JID such as "9198…:12@s.whatsapp.net". */
 function phoneOf(from: string): string {
+  // A hidden number stays hidden: "+<LID digits>" would be a stranger (D129).
+  if (isHiddenPhone(from)) return from
   if (!from.includes('@')) return from.startsWith('+') ? from : `+${from}`
   const user = from.split('@')[0]?.split(':')[0] ?? ''
   return `+${user}`
