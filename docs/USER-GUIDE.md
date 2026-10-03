@@ -203,6 +203,14 @@ Find it: click **Devices** in the sidebar.
 3. Slow down your campaigns before sending more.
 4. Click "Resume now" only when you are sure the number is fine.
 
+#### Remove a number you no longer use
+
+1. Make sure no unfinished campaign uses the number. A scheduled, running or paused campaign blocks removal: finish or cancel it first.
+2. On the number's card, click Remove.
+3. Read what will be deleted, then click "Remove permanently".
+4. The card disappears and frees one of your 20 places. Its chats and messages, groups, channels, scheduled posts, call history and synced contacts are deleted.
+5. Campaign reports keep their figures, and your contact lists and templates are not touched. You can link the same number again later with "+ Add Device".
+
 ### Settings explained
 
 - **Warmup**: For new numbers. Day 1 allows 20 messages, rising each day for ten days until your normal daily cap. Optional warmup conversations let your own numbers chat with each other.
@@ -212,7 +220,7 @@ Find it: click **Devices** in the sidebar.
 - Keep the phone charged and online. WhatsApp disconnects linked devices if the phone stays offline for about two weeks.
 - The usage bar shows messages sent today against the daily limit. It resets at midnight.
 - A "Business" badge means the number uses WhatsApp Business. Click Re-check if you change the account type.
-- Logout unlinks the number from RapBooster. Use it before you give the phone away.
+- Logout unlinks the number from RapBooster but keeps its card and chats. Remove deletes the card and its chats for good.
 
 ### Be careful
 
@@ -232,7 +240,7 @@ No. After linking, the phone only needs to be switched on with internet now and 
 
 #### Why is "+ Add Device" greyed out?
 
-You have reached the limit of 20 devices.
+You have reached the limit of 20 devices. Remove a number you no longer use to free a place.
 
 See also: [Settings › Sending & safety](#settings--sending--safety), [Dashboard](#dashboard), [Campaigns](#campaigns), [WhatsApp Groups](#whatsapp-groups).
 

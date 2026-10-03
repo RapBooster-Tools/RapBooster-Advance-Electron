@@ -98,7 +98,9 @@ async function assertDevices(deviceIds: string[]): Promise<void> {
       userMessage: 'Pick at least one device to send the sequence from.',
     })
   }
-  const found = await getPrisma().device.count({ where: { id: { in: deviceIds } } })
+  const found = await getPrisma().device.count({
+    where: { id: { in: deviceIds }, archivedAt: null },
+  })
   if (found !== new Set(deviceIds).size) {
     throw new AppError('NOT_FOUND', {
       userMessage: 'One of the selected devices no longer exists.',

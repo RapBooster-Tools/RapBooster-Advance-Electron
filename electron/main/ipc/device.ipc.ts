@@ -52,7 +52,8 @@ export function serializeDevice(row: DeviceRow, globalCap: number) {
 }
 
 async function requireDevice(id: string) {
-  const device = await getPrisma().device.findUnique({ where: { id } })
+  // An archived device is gone as far as every screen and action is concerned.
+  const device = await getPrisma().device.findFirst({ where: { id, archivedAt: null } })
   if (!device)
     throw new AppError('NOT_FOUND', { userMessage: 'That device no longer exists.' })
   return device
@@ -60,13 +61,17 @@ async function requireDevice(id: string) {
 
 export function registerDeviceHandlers(): void {
   registerHandler('device:list', async () => {
-    const rows = await getPrisma().device.findMany({ orderBy: { createdAt: 'asc' } })
+    const rows = await getPrisma().device.findMany({
+      where: { archivedAt: null },
+      orderBy: { createdAt: 'asc' },
+      take: MAX_DEVICES,
+    })
     const cap = await dailyCapPerDevice()
     return rows.map((row) => serializeDevice(row, cap))
   })
 
   registerHandler('device:create', async ({ name }) => {
-    const count = await getPrisma().device.count()
+    const count = await getPrisma().device.count({ where: { archivedAt: null } })
     if (count >= MAX_DEVICES) {
       throw new AppError('DEVICE_LIMIT_REACHED', {
         userMessage: `You can connect at most ${MAX_DEVICES} devices.`,
@@ -141,13 +146,61 @@ export function registerDeviceHandlers(): void {
     return { ok: true as const }
   })
 
+  /**
+   * Remove a device and everything it holds (customer decision D158): its
+   * chats and messages, groups, channels, posts, calls and synced contacts.
+   *
+   * A device that ever sent for a campaign is archived instead of deleted:
+   * campaign reports reference it, and deleting it would fail on that
+   * reference. Archived, it is hidden, frees its slot and never reconnects.
+   */
   registerHandler('device:delete', async ({ id }) => {
-    await requireDevice(id)
-    await waBridge.request('device:logout', { deviceId: id }).catch(() => {
-      // Deleting a never-connected device is legitimate.
+    const device = await requireDevice(id)
+    const prisma = getPrisma()
+
+    // Removing a number out from under an unfinished campaign would strand it.
+    const busy = await prisma.campaign.findFirst({
+      where: {
+        status: { in: ['scheduled', 'running', 'paused'] },
+        devices: { some: { deviceId: id } },
+      },
+      select: { name: true },
+    })
+    if (busy) {
+      throw new AppError('CONFLICT', {
+        userMessage: `"${busy.name}" still uses ${device.name}. Finish or cancel that campaign first.`,
+      })
+    }
+
+    await waBridge.request('device:logout', { deviceId: id }).catch((err: unknown) => {
+      // Removing a never-connected or already logged-out device is legitimate.
+      console.debug(`device:delete: logout of ${id} skipped`, err)
     })
     await rm(authDirFor(id), { recursive: true, force: true })
-    await getPrisma().device.delete({ where: { id } })
+
+    const usedByCampaigns = await prisma.campaignRecipient.findFirst({
+      where: { deviceId: id },
+      select: { id: true },
+    })
+    if (!usedByCampaigns) {
+      await prisma.device.delete({ where: { id } })
+      return { ok: true as const }
+    }
+
+    // Chats cascade to messages, notes, drafts, scheduled messages and flows.
+    await prisma.$transaction([
+      prisma.chat.deleteMany({ where: { deviceId: id } }),
+      prisma.group.deleteMany({ where: { deviceId: id } }),
+      prisma.groupCreateJob.deleteMany({ where: { deviceId: id } }),
+      prisma.channel.deleteMany({ where: { deviceId: id } }),
+      prisma.scheduledPost.deleteMany({ where: { deviceId: id } }),
+      prisma.callEvent.deleteMany({ where: { deviceId: id } }),
+      prisma.waContact.deleteMany({ where: { deviceId: id } }),
+      prisma.device.update({
+        where: { id },
+        data: { archivedAt: new Date(), status: 'logged_out', warmupEnabled: false },
+      }),
+    ])
     return { ok: true as const }
   })
 }

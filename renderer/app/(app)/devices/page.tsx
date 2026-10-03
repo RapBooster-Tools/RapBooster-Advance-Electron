@@ -5,6 +5,7 @@ import { Smartphone } from 'lucide-react'
 import { useState } from 'react'
 import { AddDeviceDialog } from '@renderer/components/devices/add-device-dialog'
 import { DeviceSafety, type DeviceRow } from '@renderer/components/devices/device-safety'
+import { RemoveDeviceDialog } from '@renderer/components/devices/remove-device-dialog'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -24,6 +25,7 @@ export default function DevicesPage() {
   const [adding, setAdding] = useState(false)
   const [confirmLogout, setConfirmLogout] = useState<string>()
   const [busyId, setBusyId] = useState<string>()
+  const [removing, setRemoving] = useState<DeviceRow>()
 
   // Status, warmup, health and business changes arrive as push events, so the
   // list stays live without polling. Campaign progress moves today's counts.
@@ -156,10 +158,28 @@ export default function DevicesPage() {
                     Logout
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto"
+                  onClick={() => setRemoving(device)}
+                  disabled={busyId === device.id}
+                  data-testid="remove-device"
+                >
+                  Remove
+                </Button>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {removing && (
+        <RemoveDeviceDialog
+          device={removing}
+          onClose={() => setRemoving(undefined)}
+          onRemoved={() => devices.refetch()}
+        />
       )}
 
       {/* Mounted only while open so each attempt starts fresh. */}

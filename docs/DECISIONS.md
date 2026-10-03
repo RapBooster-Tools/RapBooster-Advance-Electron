@@ -20,7 +20,7 @@ Rules: [CLAUDE.md](../CLAUDE.md) · Spec: [SPRINTS.md](../SPRINTS.md)
 
 | Area                                                                          | Entries                                                                                                           |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128, D151, D152                                                                      |
+| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128, D151, D152, D158                                                                |
 | [Architecture](#architecture)                                                 | D2–D4, D13–D16, D18, D31–D34, D39, D40, D42, D89, D93, D94, D130, D144, D146                                      |
 | [WhatsApp and anti-ban](#whatsapp-and-anti-ban)                               | D6, D7, D45, D49, D61, D63, D68, D70, D71, D76, D77, D95, D97, D99, D100, D107, D109–D111, D116, D129, D134, D147 |
 | [Data](#data)                                                                 | D5, D8, D35–D37, D41, D43, D50, D73, D74, D90, D112, D113, D115, D136, D137, D139, D140, D148                     |
@@ -114,6 +114,16 @@ Decisions the customer made. Code follows them; they change only on a new custom
   than sending at night. `sendBotMessage` always sets it. AI replies are held only by the cap
   (E6.48). E6.10 and E8.37b now assert replies in quiet hours. Supersedes the "AI replies held
   during quiet hours" default in D127.
+- **D158** · 2026-10-03 · Accepted — **Remove device** deletes everything the device holds:
+  chats and messages, groups, channels, scheduled posts, call history and synced contacts. A
+  device that campaign reports reference is **archived** instead (`Device.archivedAt`): its
+  data is deleted the same way, the row stays for the reports, it is hidden everywhere, frees
+  its slot and never reconnects. A scheduled, running or paused campaign on the device blocks
+  removal with a plain-English error. _Why:_ customer decision ("delete everything"); a logged-out
+  card used to stay forever and count toward the 20, and `device:delete` was unsafe as a button
+  (it cascaded away chats and failed on a raw FK error for devices used by campaigns). _Then:_
+  migration `20261003140000`; Devices › Remove with a confirmation that lists what is lost;
+  E6.71–E6.73.
 
 ## Architecture
 

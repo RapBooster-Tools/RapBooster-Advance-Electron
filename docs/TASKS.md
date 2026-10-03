@@ -40,7 +40,7 @@ _Customer_
 | [11. Docs](#11-docs)                                                              | 5    | 0    |
 | [12. Packaging](#12-packaging)                                                    | 9    | 0    |
 | [13. Wave 3 — workspace, automation, help](#13-wave-3--workspace-automation-help) | 15   | 0    |
-| [14. Known gaps](#14-known-gaps)                                                  | 3    | 40   |
+| [14. Known gaps](#14-known-gaps)                                                  | 4    | 39   |
 | [15. Blocked on the customer](#15-blocked-on-the-customer)                        | 0    | 6    |
 | [16. Release](#16-release)                                                        | 0    | 7    |
 
@@ -258,7 +258,7 @@ Found in Wave 3 (2026-10-03). The epic is the first word of each title.
 - [ ] **T-1440** ⬜ Design: phone preview in the template, campaign and sequence composers — today only in Settings › Appearance — _Unassigned_ · D122
 - [ ] **T-1441** ⬜ Desktop: numeric unread badge on Windows (taskbar overlay) — today the button only flashes — _Unassigned_ · D142 · K26
 - [ ] **T-1442** ⬜ Release: verify on a real Windows and macOS machine — tray clicks, OS notifications and their click-through, start at login, Baileys tapped buttons and list replies, and LID chats showing real numbers — _Unassigned_, needs _Customer_ · D142, D143, D147 · K25, REQUIREMENTS §10
-- [ ] **T-1443** ⬜ Devices: a way to remove a logged-out device card (it still counts toward the 20). `device:delete` exists but is unsafe as a button: it cascades away the device's chats and messages, and fails on a raw FK error if the device was ever used in a campaign (`CampaignRecipient.device` restricts). Proposed: "Remove" = log out + archive (new `Device.archivedAt`), hidden and not counted, history kept — _Unassigned_ · needs a customer decision
+- [x] **T-1443** ✅ Devices: Remove deletes a device and its data; a device campaign reports use is archived (hidden, slot freed); unfinished campaigns block it — _Coordinator_ · D158 · E6.71–E6.73
 
 ## 15. Blocked on the customer
 

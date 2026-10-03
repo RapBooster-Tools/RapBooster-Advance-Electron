@@ -63,6 +63,9 @@ model Device {
   healthReason      String?
   /// WhatsApp Business account — labels and catalogs exist only there.
   isBusiness        Boolean   @default(false)
+  /// Removed by the user but kept because campaign reports reference it: hidden,
+  /// not counted toward the device limit, never reconnected (D158).
+  archivedAt        DateTime?
 
   campaignLinks   CampaignDevice[]
   recipients      CampaignRecipient[]

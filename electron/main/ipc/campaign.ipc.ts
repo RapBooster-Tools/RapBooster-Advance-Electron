@@ -117,6 +117,7 @@ export function registerCampaignHandlers(): void {
     const defaults = await readSendingDefaults()
     const now = new Date()
     const deviceRows = await prisma.device.findMany({
+      where: { archivedAt: null },
       orderBy: { createdAt: 'asc' },
       take: 50,
     })

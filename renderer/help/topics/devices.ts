@@ -61,12 +61,23 @@ export const devices: HelpTopic = {
         'Click "Resume now" only when you are sure the number is fine.',
       ],
     },
+    {
+      id: 'devices-remove',
+      title: 'Remove a number you no longer use',
+      steps: [
+        'Make sure no unfinished campaign uses the number. A scheduled, running or paused campaign blocks removal: finish or cancel it first.',
+        "On the number's card, click Remove.",
+        'Read what will be deleted, then click "Remove permanently".',
+        'The card disappears and frees one of your 20 places. Its chats and messages, groups, channels, scheduled posts, call history and synced contacts are deleted.',
+        'Campaign reports keep their figures, and your contact lists and templates are not touched. You can link the same number again later with "+ Add Device".',
+      ],
+    },
   ],
   tips: [
     'Keep the phone charged and online. WhatsApp disconnects linked devices if the phone stays offline for about two weeks.',
     'The usage bar shows messages sent today against the daily limit. It resets at midnight.',
     'A "Business" badge means the number uses WhatsApp Business. Click Re-check if you change the account type.',
-    'Logout unlinks the number from RapBooster. Use it before you give the phone away.',
+    'Logout unlinks the number from RapBooster but keeps its card and chats. Remove deletes the card and its chats for good.',
   ],
   warnings: [
     'New numbers get banned most easily. Switch on Warmup for any number that is less than a few weeks old, or has not sent many messages before.',
@@ -86,7 +97,8 @@ export const devices: HelpTopic = {
     },
     {
       question: 'Why is "+ Add Device" greyed out?',
-      answer: 'You have reached the limit of 20 devices.',
+      answer:
+        'You have reached the limit of 20 devices. Remove a number you no longer use to free a place.',
     },
   ],
   related: ['settings-sending', 'dashboard', 'campaigns', 'groups'],
@@ -98,6 +110,8 @@ export const devices: HelpTopic = {
     'pairing',
     'connect',
     'warmup',
+    'remove',
+    'delete',
     'logout',
     'reconnect',
     'ban',
