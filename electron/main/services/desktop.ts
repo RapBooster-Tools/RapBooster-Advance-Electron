@@ -4,8 +4,15 @@
  */
 import type { BrowserWindow } from 'electron'
 
+export interface DesktopHooks {
+  /** Show and focus the main window, recreating it if it was closed. */
+  showWindow: () => void
+}
+
 /** Called once after the first window exists. */
-export function initDesktop(): void {}
+export function initDesktop(hooks: DesktopHooks): void {
+  void hooks
+}
 
 /** Called for every window created; may intercept close to hide to the tray. */
 export function attachWindow(win: BrowserWindow): void {

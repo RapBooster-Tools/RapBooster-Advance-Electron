@@ -163,6 +163,17 @@ function createWindow(): void {
   void win.loadURL(RENDERER_URL ? `${RENDERER_URL}/${route}` : `${APP_ORIGIN}/${route}`)
 }
 
+/** Bring the app to the front — from the tray, a notification or a second launch. */
+function showWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
 /**
  * Start wa-service and wire its events into the database and the renderer.
  *
@@ -398,13 +409,8 @@ async function bootUi(): Promise<void> {
     app.quit()
     return
   }
-  app.on('second-instance', () => {
-    const [win] = BrowserWindow.getAllWindows()
-    if (win) {
-      if (win.isMinimized()) win.restore()
-      win.focus()
-    }
-  })
+  // The window may be hidden in the tray, so show it rather than only focus it.
+  app.on('second-instance', () => showWindow())
 
   await app.whenReady()
 
@@ -480,7 +486,7 @@ async function bootUi(): Promise<void> {
   }
 
   createWindow()
-  initDesktop()
+  initDesktop({ showWindow })
 
   // Updates: wired against the feed from REQUIREMENTS §3. Until that is
   // supplied the feed is a placeholder and checks report "not configured"
