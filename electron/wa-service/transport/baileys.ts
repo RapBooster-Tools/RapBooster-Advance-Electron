@@ -280,6 +280,58 @@ function buildListMessage(message: OutgoingList): proto.IMessage {
   }
 }
 
+/**
+ * The text of a tapped button or list row.
+ *
+ * WHY the label before the id: the label is what the customer saw and what the
+ * inbox should show; chatbot flows and keyword rules match option titles, and
+ * flows also accept the id (the option id we sent), so either way still works.
+ */
+function tappedReply(content: Record<string, unknown>): string | null {
+  const buttons = content.buttonsResponseMessage as
+    { selectedButtonId?: string | null; selectedDisplayText?: string | null } | undefined
+  const template = content.templateButtonReplyMessage as
+    { selectedId?: string | null; selectedDisplayText?: string | null } | undefined
+  const list = content.listResponseMessage as
+    | {
+        title?: string | null
+        singleSelectReply?: { selectedRowId?: string | null } | null
+      }
+    | undefined
+  const interactive = content.interactiveResponseMessage as
+    | {
+        body?: { text?: string | null } | null
+        nativeFlowResponseMessage?: { paramsJson?: string | null } | null
+      }
+    | undefined
+
+  let nativeId: string | null = null
+  const params = interactive?.nativeFlowResponseMessage?.paramsJson
+  if (params) {
+    try {
+      const parsed = JSON.parse(params) as { id?: unknown }
+      if (typeof parsed.id === 'string') nativeId = parsed.id
+    } catch (err) {
+      // A malformed payload from another client: fall back to the body text.
+      console.debug('baileys: unreadable interactive reply params', err)
+    }
+  }
+
+  const candidates = [
+    buttons?.selectedDisplayText,
+    buttons?.selectedButtonId,
+    template?.selectedDisplayText,
+    template?.selectedId,
+    list?.title,
+    list?.singleSelectReply?.selectedRowId,
+    interactive?.body?.text,
+    nativeId,
+  ]
+  return (
+    candidates.find((c): c is string => typeof c === 'string' && c.trim() !== '') ?? null
+  )
+}
+
 export class BaileysTransport extends TransportEmitter implements Transport {
   private readonly sessions = new Map<string, Session>()
 
@@ -535,8 +587,10 @@ export class BaileysTransport extends TransportEmitter implements Transport {
       type = 'product'
     } else if (content.buttonsResponseMessage ?? content.templateButtonReplyMessage) {
       type = 'buttons'
+      body = tappedReply(content)
     } else if (content.listResponseMessage ?? content.interactiveResponseMessage) {
       type = 'interactive'
+      body = tappedReply(content)
     }
 
     const seconds = raw.messageTimestamp

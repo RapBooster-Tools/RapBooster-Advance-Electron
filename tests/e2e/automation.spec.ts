@@ -243,6 +243,30 @@ test('E6.1 — rule CRUD, and a rule needs exactly one of reply text or template
   expect(await call<unknown[]>('rule:list')).toHaveLength(0)
 })
 
+test('E6.1b — switching a rule off keeps every other setting', async () => {
+  // Regression: zod applies defaults inside `.partial()`, so `{ id, enabled }`
+  // used to reset match type, priority and cooldown to their defaults.
+  const rule = await call<Rule & Record<string, unknown>>('rule:create', {
+    name: 'Kept',
+    keywords: ['kept'],
+    replyText: 'Still here',
+    matchType: 'exact',
+    priority: 7,
+    cooldownMinutes: 45,
+  })
+  const off = await call<Record<string, unknown>>('rule:update', {
+    id: rule.id,
+    enabled: false,
+  })
+  expect(off).toMatchObject({
+    enabled: false,
+    matchType: 'exact',
+    priority: 7,
+    cooldownMinutes: 45,
+  })
+  await call('rule:delete', { id: rule.id })
+})
+
 test('E6.2 — rule:test applies whole-word matching, match types, priority and devices', async () => {
   await createRule({ name: 'Ship', keywords: ['shipping'], replyText: 'A' })
   await createRule({

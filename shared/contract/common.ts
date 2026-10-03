@@ -25,3 +25,30 @@ export function page<T extends z.ZodTypeAny>(item: T) {
 
 /** A request that runs in the background and reports through an event. */
 export const started = z.object({ total: z.number().int().min(0) })
+
+type Patch<T extends z.ZodRawShape> = {
+  [K in keyof T]: z.ZodOptional<T[K] extends z.ZodDefault<infer I> ? I : T[K]>
+}
+
+/**
+ * The update ("patch") form of a create schema: every field optional, and
+ * every `.default()` removed.
+ *
+ * WHY not `.partial()`: zod 4 still applies defaults inside a partial object,
+ * so `{ id, enabled: false }` would come out with every defaulted field reset
+ * — a toggle silently wiping a rule's devices, priority and cooldown.
+ */
+export function patchOf<T extends z.ZodRawShape>(
+  schema: z.ZodObject<T>,
+): z.ZodObject<Patch<T>> {
+  const shape = Object.fromEntries(
+    Object.entries(schema.shape).map(([key, field]) => {
+      const type = field as z.ZodType
+      return [
+        key,
+        (type instanceof z.ZodDefault ? (type.unwrap() as z.ZodType) : type).optional(),
+      ]
+    }),
+  )
+  return z.object(shape) as unknown as z.ZodObject<Patch<T>>
+}

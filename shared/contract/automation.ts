@@ -4,7 +4,7 @@
  */
 import { z } from 'zod'
 import { enrollmentStatus, ruleMatchType, sequenceStatus, webhookEvent } from '../types'
-import { cursor, id, isoDate, nullableIso, ok, page, pageLimit } from './common'
+import { cursor, id, isoDate, nullableIso, ok, page, pageLimit, patchOf } from './common'
 
 export const keywordRule = z.object({
   id,
@@ -125,7 +125,7 @@ export const automationChannels = {
   'rule:list': { request: z.void(), response: z.array(keywordRule) },
   'rule:create': { request: keywordRuleInput, response: keywordRule },
   'rule:update': {
-    request: keywordRuleInput.partial().extend({ id }),
+    request: patchOf(keywordRuleInput).extend({ id }),
     response: keywordRule,
   },
   'rule:delete': { request: z.object({ id }), response: ok },

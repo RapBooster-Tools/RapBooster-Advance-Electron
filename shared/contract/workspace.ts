@@ -6,7 +6,7 @@
 import { z } from 'zod'
 import { flowGraph, flowTrigger } from '../flow'
 import { clockTime, enrollmentStatus, recipientStatus } from '../types'
-import { cursor, id, isoDate, nullableIso, ok, page, pageLimit } from './common'
+import { cursor, id, isoDate, nullableIso, ok, page, pageLimit, patchOf } from './common'
 
 export const quickReply = z.object({
   id,
@@ -193,7 +193,7 @@ export const workspaceChannels = {
 
   'flow:list': { request: z.void(), response: z.array(chatbotFlow) },
   'flow:create': { request: flowInput, response: chatbotFlow },
-  'flow:update': { request: flowInput.partial().extend({ id }), response: chatbotFlow },
+  'flow:update': { request: patchOf(flowInput).extend({ id }), response: chatbotFlow },
   'flow:delete': { request: z.object({ id }), response: ok },
   /** Dry run: feed customer replies, get the bot's side of the conversation. */
   'flow:simulate': {
