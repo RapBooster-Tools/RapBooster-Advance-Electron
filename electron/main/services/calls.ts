@@ -103,11 +103,13 @@ export async function handleIncomingCall(
   const message = config.message.trim()
   if (message && !(await isSuppressed(phone))) {
     try {
-      // Automated: paced by the throttle, held by quiet hours and the cap.
+      // Automated: paced by the throttle and held by the cap, but not by quiet
+      // hours — it answers someone who is calling right now (D152).
       await waBridge.request('message:send', {
         deviceId,
         to: call.from.includes('@') ? call.from : `${phone.slice(1)}@s.whatsapp.net`,
         message: { kind: 'text', body: message },
+        quietHoursExempt: true,
       })
       replied = true
       await prisma.callEvent.update({ where: { id: call.callId }, data: { replied } })

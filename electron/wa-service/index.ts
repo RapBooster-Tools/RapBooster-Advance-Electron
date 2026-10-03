@@ -163,21 +163,25 @@ async function main(): Promise<void> {
           () => transport.send(p.deviceId, p.to, p.message),
           {
             manual: p.manual ?? false,
-            reply: p.reply ?? false,
+            quietHoursExempt: p.quietHoursExempt ?? false,
             typing: typingFor(p.to, p.message),
           },
         )) as WaResponses[K]
       }
       case 'status:post': {
         const p = payload as WaRequestEnvelope<'status:post'>['payload']
-        return (await throttle.run(p.deviceId, () =>
-          transport.postStatus(p.deviceId, p.message, p.statusJidList),
+        return (await throttle.run(
+          p.deviceId,
+          () => transport.postStatus(p.deviceId, p.message, p.statusJidList),
+          { quietHoursExempt: p.quietHoursExempt ?? false },
         )) as WaResponses[K]
       }
       case 'channel:post': {
         const p = payload as WaRequestEnvelope<'channel:post'>['payload']
-        return (await throttle.run(p.deviceId, () =>
-          transport.channelPost(p.deviceId, p.channelId, p.message),
+        return (await throttle.run(
+          p.deviceId,
+          () => transport.channelPost(p.deviceId, p.channelId, p.message),
+          { quietHoursExempt: p.quietHoursExempt ?? false },
         )) as WaResponses[K]
       }
       case 'number:check': {

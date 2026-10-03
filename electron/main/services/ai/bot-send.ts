@@ -74,14 +74,16 @@ export async function sendBotMessage(
   deviceId: string,
   chatId: string,
   outgoing: WaOutgoing,
-  options: { manual?: boolean; reply?: boolean; at?: Date; isAiReply?: boolean } = {},
+  options: { manual?: boolean; at?: Date; isAiReply?: boolean } = {},
 ): Promise<InboxMessage> {
   const { messageId } = await waBridge.request('message:send', {
     deviceId,
     to: chatId,
     message: outgoing,
     ...(options.manual ? { manual: true } : {}),
-    ...(options.reply ? { reply: true } : {}),
+    // Every bot message answers a customer — AI, flows, welcome/away, the
+    // escalation notice — so quiet hours do not hold it (D152).
+    quietHoursExempt: true,
   })
 
   const at = options.at ?? new Date()

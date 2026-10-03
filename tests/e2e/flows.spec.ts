@@ -712,9 +712,9 @@ test('E8.37 — the away message goes out outside business hours and respects it
   await expectNoMore(open, 0)
 })
 
-test('E8.37b — welcome and away go out during quiet hours; other automation still waits', async () => {
-  // Customer decision D151: they answer someone who just wrote, and an away
-  // message held until morning has missed its purpose.
+test('E8.37b — welcome, away and keyword replies all go out during quiet hours', async () => {
+  // Customer decisions D151/D152: quiet hours hold campaign-style sending
+  // only; anything answering someone who just wrote goes out at any hour.
   const clock = (offsetMin: number) => {
     const d = new Date(Date.now() + offsetMin * 60_000)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -735,7 +735,7 @@ test('E8.37b — welcome and away go out during quiet hours; other automation st
     expect(bodies).toContain('We are closed.')
     expect(bodies.some((b) => b.startsWith('Welcome'))).toBe(true)
 
-    // A keyword rule is ordinary automation: quiet hours still hold it.
+    // Quiet hours are for campaigns only (D152): a keyword rule answers too.
     const rule = await call<{ id: string }>('rule:create', {
       name: 'Night rule',
       keywords: ['pricing'],
@@ -743,7 +743,7 @@ test('E8.37b — welcome and away go out during quiet hours; other automation st
       cooldownMinutes: 0,
     })
     say(from, 'pricing')
-    await expectNoMore(from, 2)
+    expect(await expectSends(from, 3)).toContain('Prices attached')
     await call('rule:delete', { id: rule.id })
   } finally {
     await call('settings:setSendingDefaults', { quietHoursEnabled: false })

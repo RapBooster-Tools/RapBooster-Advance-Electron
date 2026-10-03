@@ -136,8 +136,9 @@ async function deliver(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     if (isParkingError(message)) {
-      // Quiet hours or the daily cap: not a failure. The reply waits and
-      // `heldDraftTick` sends it once the window ends.
+      // The daily cap: not a failure. The reply waits and `heldDraftTick`
+      // sends it once the cap resets. (Quiet hours never hold a bot reply,
+      // D152; the check stays for drafts held before that decision.)
       const reason = message.includes('quiet hours') ? 'quiet hours' : 'daily cap reached'
       await createDraft({ chatId, deviceId, text, status: 'held', reason })
       return { kind: 'drafted', status: 'held' }

@@ -20,7 +20,7 @@ Rules: [CLAUDE.md](../CLAUDE.md) · Spec: [SPRINTS.md](../SPRINTS.md)
 
 | Area                                                                          | Entries                                                                                                           |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128, D151                                                                            |
+| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128, D151, D152                                                                      |
 | [Architecture](#architecture)                                                 | D2–D4, D13–D16, D18, D31–D34, D39, D40, D42, D89, D93, D94, D130, D144, D146                                      |
 | [WhatsApp and anti-ban](#whatsapp-and-anti-ban)                               | D6, D7, D45, D49, D61, D63, D68, D70, D71, D76, D77, D95, D97, D99, D100, D107, D109–D111, D116, D129, D134, D147 |
 | [Data](#data)                                                                 | D5, D8, D35–D37, D41, D43, D50, D73, D74, D90, D112, D113, D115, D136, D137, D139, D140, D148                     |
@@ -86,7 +86,7 @@ Decisions the customer made. Code follows them; they change only on a new custom
 - **D126** · 2026-10-02 · Accepted — Safety defaults: 200 sends per device per day and quiet
   hours 21:00–09:00, applied to existing installs that never changed the setting, with a
   one-time notice. _Then:_ `services/sending-policy.ts`; the dashboard shows the notice once.
-- **D127** · 2026-10-02 · Accepted — Every proposed default in the improvement plan (Q1–Q13)
+- **D127** · 2026-10-02 · Amended by D152 — Every proposed default in the improvement plan (Q1–Q13)
   accepted: opt-out words STOP, UNSUBSCRIBE, बंद with a confirmation; suppression global;
   72-hour reply attribution; "read" shown as a lower bound; static tags first; AI caps 500 per
   device and 20 per chat per day; approve-before-send off; tokens plus an editable price; AI
@@ -98,12 +98,22 @@ Decisions the customer made. Code follows them; they change only on a new custom
   upserted 1:1 chats (LID chats kept only when WhatsApp supplies the phone mapping), the inbox
   records every inbound 1:1 chat, and `WaContact` carries `inAddressBook`, `hasChat`,
   `lastChatAt` (additive migration `20261003110000`).
-- **D151** · 2026-10-03 · Accepted — Welcome and away messages go out **during quiet hours**;
-  the daily cap, pacing and typing still apply. Campaigns, sequences, keyword rules, flows and
-  AI replies still wait. _Why:_ customer decision; they answer someone who has just written,
-  and an away message held until morning has missed its purpose. _Then:_ a `reply` flag on
-  `message:send` (throttle skips only the quiet-hours check); E8.37b. Amends D133; resolves
-  K22 and T-1433.
+- **D151** · 2026-10-03 · Superseded by D152 — Welcome and away messages go out **during quiet
+  hours**; the daily cap, pacing and typing still apply. _Why:_ customer decision; they answer
+  someone who has just written, and an away message held until morning has missed its purpose.
+  _Then:_ widened the same day by D152. Amends D133; resolves K22 and T-1433.
+- **D152** · 2026-10-03 · Accepted — **Quiet hours are for campaign-style sending only**:
+  campaigns, drip sequences, bulk group sends and warmup. Everything that answers a customer (AI
+  bot, chatbot flows, keyword rules, welcome/away, call auto-reply, opt-out confirmation) and
+  everything the user scheduled for a chosen time (scheduled inbox messages, status and channel
+  posts) goes out at any hour. The daily cap, pacing and typing still apply to all automation;
+  typed inbox replies stay exempt from both. _Why:_ customer instruction ("AI replies should
+  also be working always, quiet hours only for campaigns"). _Then:_ `quietHoursExempt` on
+  `message:send`, `status:post` and `channel:post`; the throttle skips only the quiet-hours
+  check for it. Exemption is opt-in per send, so new code that forgets the flag waits rather
+  than sending at night. `sendBotMessage` always sets it. AI replies are held only by the cap
+  (E6.48). E6.10 and E8.37b now assert replies in quiet hours. Supersedes the "AI replies held
+  during quiet hours" default in D127.
 
 ## Architecture
 

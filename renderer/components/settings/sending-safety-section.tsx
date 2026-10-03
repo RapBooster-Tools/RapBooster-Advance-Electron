@@ -151,8 +151,10 @@ export function SendingSafetySection() {
               Quiet hours
             </label>
             <p className="mt-1 text-xs text-ink-muted">
-              No automated message goes out in this window (local time); work waits and
-              resumes when it ends. Replies you type in the inbox still send.
+              Campaigns, follow-up sequences, bulk group messages and warmup pause in this
+              window (local time) and resume when it ends. Replies to customers — AI,
+              chatbot flows, keyword and welcome/away replies — and messages you schedule
+              still go out at any hour, within the daily limit.
             </p>
             <div className="mt-2 grid grid-cols-3 gap-3">
               <Field id="sd-quietHoursStart" label="From">

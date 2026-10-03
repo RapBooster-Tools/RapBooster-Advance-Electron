@@ -23,11 +23,16 @@ import { inQuietHours } from '../../shared/quiet-hours'
  * their phone instead. It still queues behind in-flight automation and still
  * counts toward today's total.
  *
- * A *reply* — an automatic answer to a message the customer has just sent
- * (welcome, away) — skips only 1 (customer decision, D151): an away message
- * that waits for the morning has missed its purpose, and answering someone who
- * just wrote is not the unsolicited traffic quiet hours guard against. The
- * daily cap, pacing and typing still apply.
+ * A *quiet-hours-exempt* send skips only 1 (customer decisions D151, D152):
+ * quiet hours are for campaign-style sending — campaigns, drip sequences, bulk
+ * group sends, warmup. Anything that answers a customer (AI, keyword rules,
+ * flows, welcome/away, call replies) and anything the user scheduled for a
+ * time they chose (scheduled messages, status and channel posts) goes out at
+ * any hour. The daily cap, pacing and typing still apply.
+ *
+ * NOTE: exemption is opt-in per send, so new code that forgets the flag errs
+ * on the safe side — it waits for quiet hours to end rather than sending at
+ * 3 a.m.
  *
  * Concurrency comes from running several devices, never from parallel sends on
  * one account — that is the fastest route to a ban.
@@ -66,8 +71,8 @@ export class QuietHoursError extends Error {
 export interface RunOptions {
   /** A person's inbox reply: exempt from quiet hours and the daily cap. */
   manual?: boolean
-  /** An instant answer to an inbound message: exempt from quiet hours only. */
-  reply?: boolean
+  /** Not campaign-style: exempt from quiet hours only (D152). */
+  quietHoursExempt?: boolean
   /** Who sees the typing indicator, and which kind, when simulation is on. */
   typing?: { to: string; state: 'composing' | 'recording'; chars: number }
 }
@@ -196,7 +201,11 @@ export class ThrottleScheduler {
       const { dailyCap, sleepAfter, sleepDurationMs, delayFromMs, delayToMs } =
         state.config
 
-      if (!options.manual && !options.reply && inQuietHours(state.config.quietHours)) {
+      if (
+        !options.manual &&
+        !options.quietHoursExempt &&
+        inQuietHours(state.config.quietHours)
+      ) {
         throw new QuietHoursError(deviceId)
       }
       if (!options.manual && dailyCap > 0 && state.sentToday >= dailyCap) {

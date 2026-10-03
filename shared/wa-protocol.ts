@@ -50,10 +50,11 @@ export interface WaRequests {
      */
     manual?: boolean
     /**
-     * A welcome or away message answering what the customer just sent: sent
-     * inside quiet hours, still held by the daily cap (D151).
+     * Not held by quiet hours (D151, D152): everything that answers a
+     * customer, and what the user scheduled for a time they chose. Quiet hours
+     * are for campaign-style sending only. The daily cap still applies.
      */
-    reply?: boolean
+    quietHoursExempt?: boolean
   }
   /** Apply pacing rules to a device. Sent whenever sending defaults change. */
   'throttle:configure': {
@@ -76,6 +77,8 @@ export interface WaRequests {
     message: WaStatusContent
     /** JIDs allowed to see it. WhatsApp requires an explicit audience. */
     statusJidList: string[]
+    /** A post the user scheduled for a chosen time (D152). */
+    quietHoursExempt?: boolean
   }
   /** Which of these E.164 numbers have WhatsApp. Read-only, but rate limited. */
   'number:check': { deviceId: string; phones: string[] }
@@ -118,7 +121,13 @@ export interface WaRequests {
   /** `key` is an invite code (whatsapp.com/channel/<code>) or a newsletter JID. */
   'channel:follow': { deviceId: string; key: string }
   /** Paced like any send. */
-  'channel:post': { deviceId: string; channelId: string; message: WaStatusContent }
+  'channel:post': {
+    deviceId: string
+    channelId: string
+    message: WaStatusContent
+    /** A post the user scheduled for a chosen time (D152). */
+    quietHoursExempt?: boolean
+  }
   'catalog:fetch': { deviceId: string }
   'business:profile': { deviceId: string }
   'chat:label': {

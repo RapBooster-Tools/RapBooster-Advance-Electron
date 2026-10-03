@@ -276,9 +276,9 @@ function clock(offsetMinutes: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-test('E6.48 — quiet hours hold the reply, and it sends once they end', async () => {
+test('E6.48 — quiet hours never hold an AI reply (D152); the daily cap does, and it sends once lifted', async () => {
   await withApp({ RB_TICK_MS: '1000' }, async (ctx) => {
-    stub.reply = 'Good morning reply.'
+    stub.reply = 'Here to help.'
     await armBot(ctx.win, { key: { setting: 'ai.apiKey', value: 'sk-stub' } })
     await ctx.win.evaluate(
       ({ start, end }) =>
@@ -286,27 +286,39 @@ test('E6.48 — quiet hours hold the reply, and it sends once they end', async (
           quietHoursEnabled: true,
           quietHoursStart: start,
           quietHoursEnd: end,
+          dailyCapPerDevice: 1,
         }),
       { start: clock(-60), end: clock(60) },
     )
     await connectDevice(ctx.win)
-    inject(ctx, '+919800001108', 'Late night question')
 
+    // Inside quiet hours, the customer is answered at once.
+    inject(ctx, '+919800001108', 'Late night question')
+    await expect
+      .poll(() => sentBodies(ctx), { timeout: 30_000 })
+      .toEqual(['Here to help.'])
+    expect(await drafts(ctx.win)).toHaveLength(0)
+
+    // The cap of 1 is now used up: the next reply is held, not dropped.
+    inject(ctx, '+919800001112', 'Another question')
     await expect
       .poll(async () => (await drafts(ctx.win)).map((d) => [d.status, d.reason]), {
         timeout: 30_000,
       })
-      .toEqual([['held', 'quiet hours']])
-    // The tick keeps running and must not push it out while still quiet.
+      .toEqual([['held', 'daily cap reached']])
+    // The tick keeps running and must not push it out while the cap holds.
     await ctx.win.waitForTimeout(2_500)
-    expect(sentBodies(ctx)).toHaveLength(0)
+    expect(sentBodies(ctx)).toHaveLength(1)
 
     await ctx.win.evaluate(() =>
-      window.api.invoke('settings:setSendingDefaults', { quietHoursEnabled: false }),
+      window.api.invoke('settings:setSendingDefaults', {
+        quietHoursEnabled: false,
+        dailyCapPerDevice: 200,
+      }),
     )
     await expect
       .poll(() => sentBodies(ctx), { timeout: 30_000 })
-      .toEqual(['Good morning reply.'])
+      .toEqual(['Here to help.', 'Here to help.'])
     await expect.poll(async () => (await drafts(ctx.win)).length).toBe(0)
   })
 })

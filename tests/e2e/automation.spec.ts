@@ -453,7 +453,7 @@ test('E6.9 — a chat opted out of auto-replies is left to a human', async () =>
   expect(sendsTo(from)).toHaveLength(0)
 })
 
-test('E6.10 — in quiet hours a matched rule parks: nothing sent, no hit, no AI', async () => {
+test('E6.10 — in quiet hours a matched rule still answers (D152): sent, hit counted, no AI', async () => {
   const from = '+919000010001'
   const clock = (offsetMin: number) => {
     const d = new Date(Date.now() + offsetMin * 60_000)
@@ -472,14 +472,9 @@ test('E6.10 — in quiet hours a matched rule parks: nothing sent, no hit, no AI
   try {
     await dismissToasts()
     inject({ type: 'message', from, body: 'warranty?' })
-    await expect
-      .poll(
-        () => query(`SELECT id FROM Chat WHERE id = ?`, `${from}@s.whatsapp.net`).length,
-      )
-      .toBe(1)
-    await win.waitForTimeout(3000)
-    expect(sendsTo(from)).toHaveLength(0)
-    expect(await hitCount(rule.id)).toBe(0)
+    // Quiet hours are for campaigns only: a customer's question is answered.
+    await expect.poll(() => sendsTo(from).length).toBe(1)
+    expect(await hitCount(rule.id)).toBe(1)
     expect(await aiToasts()).toBe(0)
   } finally {
     await call('settings:setSendingDefaults', { quietHoursEnabled: false })

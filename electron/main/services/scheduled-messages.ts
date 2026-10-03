@@ -123,10 +123,13 @@ async function sendOne(row: DueRow): Promise<Outcome> {
   const message = outgoing(row)
   let messageId: string
   try {
+    // The user chose this time, so quiet hours do not move it (D152); the
+    // daily cap and opt-outs still apply.
     const result = await waBridge.request('message:send', {
       deviceId: row.chat.deviceId,
       to: row.chatId,
       message,
+      quietHoursExempt: true,
     })
     messageId = result.messageId
   } catch (err) {

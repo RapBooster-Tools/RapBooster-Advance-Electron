@@ -125,14 +125,9 @@ async function deliver(
   text: string,
 ): Promise<boolean> {
   try {
-    // Quiet hours do not hold these: an away message is for exactly the hours
-    // the business is closed (D151). The daily cap still applies.
-    await sendBotMessage(
-      ctx.deviceId,
-      ctx.chatId,
-      { kind: 'text', body: text },
-      { reply: true },
-    )
+    // Not held by quiet hours (bot-send, D151): an away message is for exactly
+    // the hours the business is closed. The daily cap still applies.
+    await sendBotMessage(ctx.deviceId, ctx.chatId, { kind: 'text', body: text })
     return true
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)

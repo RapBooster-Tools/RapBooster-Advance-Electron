@@ -3,7 +3,8 @@
  *
  *   - `pending_approval` — approve-before-send is on; a person approves, edits
  *     or discards it in the inbox.
- *   - `held` — the throttle parked the send (quiet hours or the daily cap);
+ *   - `held` — the throttle parked the send (the daily cap; quiet hours no
+ *     longer hold bot replies, D152);
  *     `heldDraftTick` sends it once the condition lifts.
  *
  * Drafts live in SQLite, so a restart loses none of them (CLAUDE.md §2.6).
@@ -152,7 +153,7 @@ async function staleReason(draft: {
 }
 
 /**
- * Send replies held by quiet hours or the daily cap, once that lifts.
+ * Send replies held by the daily cap, once it resets.
  *
  * These are automated sends — no `manual` — so the throttle re-checks the
  * window. A device still parked keeps its drafts held and is skipped for the

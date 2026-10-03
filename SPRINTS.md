@@ -1697,7 +1697,8 @@ in total.
 
 ### 15.3 Acceptance criteria
 
-- No automated send of any kind bypasses the throttle, the daily cap or quiet hours.
+- No automated send of any kind bypasses the throttle or the daily cap. Quiet hours hold
+  campaign-style sending only (D152).
 - An opted-out number is never messaged by a campaign, sequence, status, group add, keyword
   rule or the AI.
 - Every new time-driven job reads its state from SQLite and survives a restart.
@@ -1817,7 +1818,7 @@ E5.71–E5.79 are unused.
 | E6.7  | A disabled rule is ignored                                                    |
 | E6.8  | A rule scoped to other devices does not answer on this one                    |
 | E6.9  | A chat opted out of auto-replies is left to a human                           |
-| E6.10 | In quiet hours a matched rule parks: nothing sent, no hit, no AI              |
+| E6.10 | In quiet hours a matched rule still answers (D152)                            |
 | E6.11 | UI: a rule created through the screen answers the "Test a message" box        |
 | E6.12 | Webhook CRUD: the secret is returned once and never listed                    |
 | E6.13 | `message.received` is delivered with a valid HMAC signature                   |
@@ -1851,7 +1852,7 @@ E5.71–E5.79 are unused.
 | E6.44 + E6.45 | Approve-before-send drafts; approve sends, discard does not              |
 | E6.46         | A quick burst of messages gets one model call that reads all of them     |
 | E6.47         | The "after N messages" trigger escalates instead of calling the model    |
-| E6.48         | Quiet hours hold the reply, and it sends once they end                   |
+| E6.48         | Quiet hours never hold an AI reply; the daily cap does, then sends       |
 | E6.49         | UI: the inbox Drafts filter, badge and Edit & approve                    |
 | E6.50         | Provider configuration: defaults, key status, validation and the screen  |
 
@@ -1939,8 +1940,9 @@ rules · Welcome & away · Webhooks · Calls, and it still opens on Keyword rule
 
 ### 16.3 Acceptance criteria
 
-- No automated send — flow step, welcome, away or scheduled message — bypasses the throttle,
-  the daily cap or quiet hours. Only a person pressing Send in the inbox is a manual send.
+- No automated send — flow step, welcome, away or scheduled message — bypasses the throttle
+  or the daily cap. None of them is held by quiet hours, which are for campaign-style sending
+  only (D152). Only a person pressing Send in the inbox is a manual send.
 - Flows, welcome and away never reach a group, a chat opted out of auto-replies or a
   suppressed number (E8.27, E8.39).
 - A chat in a flow gets the flow's answer and nothing else: no keyword reply, no AI (E8.26).
@@ -1993,28 +1995,29 @@ covers several IDs, its title carries the range.
 
 #### Chatbot flows, welcome and away — `flows.spec.ts`
 
-| ID    | Test                                                                             |
-| ----- | -------------------------------------------------------------------------------- |
-| E8.20 | Flow CRUD; an invalid graph or a keyword flow without keywords is refused        |
-| E8.21 | A keyword starts the flow and sends the numbered menu                            |
-| E8.22 | A choice by number or by title advances the flow and ends it                     |
-| E8.23 | A reply matching no choice sends the "didn't understand" text and stays          |
-| E8.24 | A question saves the answer and a later step uses it                             |
-| E8.25 | A handoff escalates the chat; the AI bot then stays out                          |
-| E8.26 | Flows answer before keyword rules: a message matching both gets only the flow    |
-| E8.27 | Opted-out and suppressed numbers get nothing from a flow                         |
-| E8.28 | A flow scoped to other devices does not answer this one                          |
-| E8.29 | An unanswered session expires and a late reply is no longer a menu choice        |
-| E8.30 | `flow:simulate` produces exactly what a real chat receives                       |
-| E8.31 | A buttons menu sends real buttons, and a tapped button advances                  |
-| E8.32 | A list menu sends a list; the new-chat trigger fires on the first message only   |
-| E8.33 | Switching a flow off ends its conversations                                      |
-| E8.34 | Builder: start from a template, edit a step, see errors inline, save and list it |
-| E8.35 | Builder test panel chats with the flow without sending anything                  |
-| E8.36 | The welcome message goes out once, on a chat's first message only                |
-| E8.37 | The away message goes out outside business hours and respects its cooldown       |
-| E8.38 | Welcome & away screen saves settings and explains bad hours                      |
-| E8.39 | Welcome and away skip opted-out and suppressed numbers                           |
+| ID     | Test                                                                             |
+| ------ | -------------------------------------------------------------------------------- |
+| E8.20  | Flow CRUD; an invalid graph or a keyword flow without keywords is refused        |
+| E8.21  | A keyword starts the flow and sends the numbered menu                            |
+| E8.22  | A choice by number or by title advances the flow and ends it                     |
+| E8.23  | A reply matching no choice sends the "didn't understand" text and stays          |
+| E8.24  | A question saves the answer and a later step uses it                             |
+| E8.25  | A handoff escalates the chat; the AI bot then stays out                          |
+| E8.26  | Flows answer before keyword rules: a message matching both gets only the flow    |
+| E8.27  | Opted-out and suppressed numbers get nothing from a flow                         |
+| E8.28  | A flow scoped to other devices does not answer this one                          |
+| E8.29  | An unanswered session expires and a late reply is no longer a menu choice        |
+| E8.30  | `flow:simulate` produces exactly what a real chat receives                       |
+| E8.31  | A buttons menu sends real buttons, and a tapped button advances                  |
+| E8.32  | A list menu sends a list; the new-chat trigger fires on the first message only   |
+| E8.33  | Switching a flow off ends its conversations                                      |
+| E8.34  | Builder: start from a template, edit a step, see errors inline, save and list it |
+| E8.35  | Builder test panel chats with the flow without sending anything                  |
+| E8.36  | The welcome message goes out once, on a chat's first message only                |
+| E8.37  | The away message goes out outside business hours and respects its cooldown       |
+| E8.37b | Welcome, away and keyword replies all go out during quiet hours (D151, D152)     |
+| E8.38  | Welcome & away screen saves settings and explains bad hours                      |
+| E8.39  | Welcome and away skip opted-out and suppressed numbers                           |
 
 #### Contacts import and grabber — `contacts-import.spec.ts`
 

@@ -167,6 +167,8 @@ async function deliverClaimed(id: string): Promise<void> {
           deviceId: post.deviceId,
           channelId: post.channelId,
           message: contentOf(post),
+          // Posted at the time the user chose (D152).
+          quietHoursExempt: true,
         }))
       } else {
         const statusJidList = await statusAudience(parseListIds(post.listIds))
@@ -177,6 +179,7 @@ async function deliverClaimed(id: string): Promise<void> {
           deviceId: post.deviceId,
           message: contentOf(post),
           statusJidList,
+          quietHoursExempt: true,
         }))
       }
 

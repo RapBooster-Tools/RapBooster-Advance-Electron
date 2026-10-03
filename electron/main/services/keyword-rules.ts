@@ -239,12 +239,13 @@ export async function tryKeywordReply(ctx: InboundContext): Promise<boolean> {
 
     let messageId: string
     try {
-      // Automated, so no `manual` flag: the throttle paces it and quiet hours
-      // and the daily cap apply.
+      // Automated, so no `manual` flag: the throttle paces it and the daily
+      // cap applies. Quiet hours do not — it answers a customer (D152).
       const sent = await waBridge.request('message:send', {
         deviceId: ctx.deviceId,
         to: ctx.chatId,
         message,
+        quietHoursExempt: true,
       })
       messageId = sent.messageId
     } catch (err) {
