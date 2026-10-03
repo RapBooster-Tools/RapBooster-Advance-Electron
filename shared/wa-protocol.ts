@@ -49,6 +49,11 @@ export interface WaRequests {
      * group jobs, posts) leaves this unset and parks instead (D89).
      */
     manual?: boolean
+    /**
+     * A welcome or away message answering what the customer just sent: sent
+     * inside quiet hours, still held by the daily cap (D151).
+     */
+    reply?: boolean
   }
   /** Apply pacing rules to a device. Sent whenever sending defaults change. */
   'throttle:configure': {

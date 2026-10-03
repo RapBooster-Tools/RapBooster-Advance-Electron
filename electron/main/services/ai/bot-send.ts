@@ -74,13 +74,14 @@ export async function sendBotMessage(
   deviceId: string,
   chatId: string,
   outgoing: WaOutgoing,
-  options: { manual?: boolean; at?: Date; isAiReply?: boolean } = {},
+  options: { manual?: boolean; reply?: boolean; at?: Date; isAiReply?: boolean } = {},
 ): Promise<InboxMessage> {
   const { messageId } = await waBridge.request('message:send', {
     deviceId,
     to: chatId,
     message: outgoing,
     ...(options.manual ? { manual: true } : {}),
+    ...(options.reply ? { reply: true } : {}),
   })
 
   const at = options.at ?? new Date()

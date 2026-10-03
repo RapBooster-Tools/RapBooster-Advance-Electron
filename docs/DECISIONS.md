@@ -20,7 +20,7 @@ Rules: [CLAUDE.md](../CLAUDE.md) · Spec: [SPRINTS.md](../SPRINTS.md)
 
 | Area                                                                          | Entries                                                                                                           |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128                                                                                  |
+| [Product scope and customer decisions](#product-scope-and-customer-decisions) | D1, D66, D79–D81, D85, D117–D128, D151                                                                            |
 | [Architecture](#architecture)                                                 | D2–D4, D13–D16, D18, D31–D34, D39, D40, D42, D89, D93, D94, D130, D144, D146                                      |
 | [WhatsApp and anti-ban](#whatsapp-and-anti-ban)                               | D6, D7, D45, D49, D61, D63, D68, D70, D71, D76, D77, D95, D97, D99, D100, D107, D109–D111, D116, D129, D134, D147 |
 | [Data](#data)                                                                 | D5, D8, D35–D37, D41, D43, D50, D73, D74, D90, D112, D113, D115, D136, D137, D139, D140, D148                     |
@@ -98,6 +98,12 @@ Decisions the customer made. Code follows them; they change only on a new custom
   upserted 1:1 chats (LID chats kept only when WhatsApp supplies the phone mapping), the inbox
   records every inbound 1:1 chat, and `WaContact` carries `inAddressBook`, `hasChat`,
   `lastChatAt` (additive migration `20261003110000`).
+- **D151** · 2026-10-03 · Accepted — Welcome and away messages go out **during quiet hours**;
+  the daily cap, pacing and typing still apply. Campaigns, sequences, keyword rules, flows and
+  AI replies still wait. _Why:_ customer decision; they answer someone who has just written,
+  and an away message held until morning has missed its purpose. _Then:_ a `reply` flag on
+  `message:send` (throttle skips only the quiet-hours check); E8.37b. Amends D133; resolves
+  K22 and T-1433.
 
 ## Architecture
 
@@ -444,7 +450,7 @@ Decisions the customer made. Code follows them; they change only on a new custom
   sessions**; a duplicated flow starts off. _Why:_ a customer who left mid-menu must not have
   a later "1" read as a menu choice, and a flow the user turned off must stop answering now,
   not in half an hour. E8.29, E8.33.
-- **D133** · 2026-10-03 · Accepted — Welcome and away messages (Setting `autoreply.config`,
+- **D133** · 2026-10-03 · Amended by D151 — Welcome and away messages (Setting `autoreply.config`,
   both off by default). Welcome: once per chat, on its first inbound message. Away: outside
   the weekly hours (this computer's time zone), at most once per cooldown per chat (default
   12 h). Each is **stamped before sending** with a conditional update (`Chat.welcomedAt`,

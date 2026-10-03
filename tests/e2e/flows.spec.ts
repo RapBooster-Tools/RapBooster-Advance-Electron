@@ -712,6 +712,45 @@ test('E8.37 — the away message goes out outside business hours and respects it
   await expectNoMore(open, 0)
 })
 
+test('E8.37b — welcome and away go out during quiet hours; other automation still waits', async () => {
+  // Customer decision D151: they answer someone who just wrote, and an away
+  // message held until morning has missed its purpose.
+  const clock = (offsetMin: number) => {
+    const d = new Date(Date.now() + offsetMin * 60_000)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  await call('autoreply:setConfig', {
+    welcome: { ...DISABLED_AUTOREPLY.welcome, enabled: true },
+    away: { ...DISABLED_AUTOREPLY.away, enabled: true },
+  })
+  await call('settings:setSendingDefaults', {
+    quietHoursEnabled: true,
+    quietHoursStart: clock(-60),
+    quietHoursEnd: clock(60),
+  })
+  try {
+    const from = '+919100003711'
+    say(from, 'late night question')
+    const bodies = await expectSends(from, 2)
+    expect(bodies).toContain('We are closed.')
+    expect(bodies.some((b) => b.startsWith('Welcome'))).toBe(true)
+
+    // A keyword rule is ordinary automation: quiet hours still hold it.
+    const rule = await call<{ id: string }>('rule:create', {
+      name: 'Night rule',
+      keywords: ['pricing'],
+      replyText: 'Prices attached',
+      cooldownMinutes: 0,
+    })
+    say(from, 'pricing')
+    await expectNoMore(from, 2)
+    await call('rule:delete', { id: rule.id })
+  } finally {
+    await call('settings:setSendingDefaults', { quietHoursEnabled: false })
+    await call('autoreply:setConfig', DISABLED_AUTOREPLY)
+  }
+})
+
 test('E8.38 — welcome & away screen saves settings and explains bad hours', async () => {
   await openAutomation()
   await win.getByTestId('automation-tab-welcome').click()

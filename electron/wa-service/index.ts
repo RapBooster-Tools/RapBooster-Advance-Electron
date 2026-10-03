@@ -161,7 +161,11 @@ async function main(): Promise<void> {
         return (await throttle.run(
           p.deviceId,
           () => transport.send(p.deviceId, p.to, p.message),
-          { manual: p.manual ?? false, typing: typingFor(p.to, p.message) },
+          {
+            manual: p.manual ?? false,
+            reply: p.reply ?? false,
+            typing: typingFor(p.to, p.message),
+          },
         )) as WaResponses[K]
       }
       case 'status:post': {

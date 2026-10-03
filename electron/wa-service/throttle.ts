@@ -23,6 +23,12 @@ import { inQuietHours } from '../../shared/quiet-hours'
  * their phone instead. It still queues behind in-flight automation and still
  * counts toward today's total.
  *
+ * A *reply* — an automatic answer to a message the customer has just sent
+ * (welcome, away) — skips only 1 (customer decision, D151): an away message
+ * that waits for the morning has missed its purpose, and answering someone who
+ * just wrote is not the unsolicited traffic quiet hours guard against. The
+ * daily cap, pacing and typing still apply.
+ *
  * Concurrency comes from running several devices, never from parallel sends on
  * one account — that is the fastest route to a ban.
  */
@@ -60,6 +66,8 @@ export class QuietHoursError extends Error {
 export interface RunOptions {
   /** A person's inbox reply: exempt from quiet hours and the daily cap. */
   manual?: boolean
+  /** An instant answer to an inbound message: exempt from quiet hours only. */
+  reply?: boolean
   /** Who sees the typing indicator, and which kind, when simulation is on. */
   typing?: { to: string; state: 'composing' | 'recording'; chars: number }
 }
@@ -188,7 +196,7 @@ export class ThrottleScheduler {
       const { dailyCap, sleepAfter, sleepDurationMs, delayFromMs, delayToMs } =
         state.config
 
-      if (!options.manual && inQuietHours(state.config.quietHours)) {
+      if (!options.manual && !options.reply && inQuietHours(state.config.quietHours)) {
         throw new QuietHoursError(deviceId)
       }
       if (!options.manual && dailyCap > 0 && state.sentToday >= dailyCap) {

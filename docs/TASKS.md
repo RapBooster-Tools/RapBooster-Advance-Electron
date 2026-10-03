@@ -40,7 +40,7 @@ _Customer_
 | [11. Docs](#11-docs)                                                              | 5    | 0    |
 | [12. Packaging](#12-packaging)                                                    | 9    | 0    |
 | [13. Wave 3 — workspace, automation, help](#13-wave-3--workspace-automation-help) | 11   | 4    |
-| [14. Known gaps](#14-known-gaps)                                                  | 2    | 40   |
+| [14. Known gaps](#14-known-gaps)                                                  | 3    | 39   |
 | [15. Blocked on the customer](#15-blocked-on-the-customer)                        | 0    | 6    |
 | [16. Release](#16-release)                                                        | 0    | 7    |
 
@@ -248,7 +248,7 @@ Found in Wave 3 (2026-10-03). The epic is the first word of each title.
 - [ ] **T-1430** ⬜ Automation: live "chats in progress" count per flow — the count refreshes only when the list loads; there is no flow event — _Unassigned_ · D132
 - [ ] **T-1431** ⬜ Automation: drag steps on the flow canvas — layout is automatic today — _Unassigned_ · D131
 - [ ] **T-1432** ⬜ Automation: retry a welcome message parked by quiet hours or the cap — today it is dropped — _Unassigned_ · D133 · K23
-- [ ] **T-1433** ⬜ Automation: decide whether away messages go out during quiet hours — _Customer_ · D133 · K22, ROADMAP R4
+- [x] **T-1433** ✅ Automation: away and welcome messages go out during quiet hours (cap still applies) — _Customer → Coordinator_ · D151 · E8.37b
 - [ ] **T-1434** ⬜ Inbox: give mock inject a file name and size, so E8.16 can assert the document bubble's name line — _Unassigned_
 - [ ] **T-1435** ⬜ Inbox: show incoming photos and videos by kind (today "Photo or video"); send a scheduled audio file as audio, not a document — _Unassigned_ · K27
 - [ ] **T-1436** ⬜ Audience: grabber per-phone preview counts ignore "chatted since" — _Unassigned_ · D140 · E8.56
