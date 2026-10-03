@@ -9,7 +9,9 @@
  * No window, no renderer. Exits non-zero on any failure.
  */
 import { app } from 'electron'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { bootDatabase } from './db/boot'
 import {
   checkpoint,
@@ -19,6 +21,9 @@ import {
 } from './db/client'
 import { backupsDir, databasePath, migrationsDir, userDataDir } from './db/paths'
 import { listBackups } from './db/backup'
+import { previewImportFile } from './services/import/row-source'
+import { trayIcon } from './services/desktop/tray'
+import { PROBE_XLSX_BASE64 } from './self-test-fixtures'
 
 const failures: string[] = []
 
@@ -215,6 +220,34 @@ async function main(): Promise<void> {
     check('baileys voice-note waveform', waveform?.length === 64)
   } catch (err) {
     check('baileys voice-note waveform', false, String(err))
+  }
+
+  // 8. Excel import runs in a worker thread built as its own chunk, and
+  //    read-excel-file pulls in further modules at runtime. Dev resolves both
+  //    from the source tree; only the packaged app proves they shipped.
+  const probeDir = mkdtempSync(join(tmpdir(), 'rb-selftest-'))
+  try {
+    const file = join(probeDir, 'probe.xlsx')
+    writeFileSync(file, Buffer.from(PROBE_XLSX_BASE64, 'base64'))
+    const preview = await previewImportFile(file)
+    check(
+      'xlsx import worker',
+      preview.headers.join(',') === 'Name,Mobile' &&
+        preview.sampleRows[0]?.[1] === '919800000001',
+      JSON.stringify(preview.headers),
+    )
+  } catch (err) {
+    check('xlsx import worker', false, String(err))
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+
+  // 9. The tray icon is a `?asset` copied into out/main; a missing file only
+  //    logs a warning at runtime and leaves an invisible tray entry.
+  try {
+    check('tray icon packaged', !trayIcon().isEmpty())
+  } catch (err) {
+    check('tray icon packaged', false, String(err))
   }
 
   console.log('---')

@@ -290,6 +290,8 @@ model CampaignRecipient {
   @@index([deviceId, status])
   @@index([messageId])
   @@index([phone, sentAt])
+  /// Deleting a contact cascades here; without this the delete scans every row.
+  @@index([contactId])
 }
 
 // ───────────────────────────────── Groups ────────────────────────────────

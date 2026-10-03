@@ -38,7 +38,7 @@ let refreshTimer: NodeJS.Timeout | undefined
  * electron-vite copies a `?asset` import into out/main, which is packaged —
  * its `resources/` folder is not.
  */
-function trayIcon(): NativeImage {
+export function trayIcon(): NativeImage {
   const mac = process.platform === 'darwin'
   const image = nativeImage.createFromPath(mac ? template16 : tray16)
   const hiDpi = nativeImage.createFromPath(mac ? template32 : tray32)
