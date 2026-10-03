@@ -394,6 +394,8 @@ Things that will bite, listed so nobody rediscovers them the expensive way.
 | A test-only env var or global seam              | Guard it with `NODE_ENV === 'test'` so it is inert in production (D92, D149)       |
 | Resolving a sibling file from `__dirname`       | Probe a candidate list — Rollup may move a shared module into `chunks/` (D150)     |
 | Treating a `@lid` JID's digits as a phone       | Resolve through `LidResolver`; unresolved stays `<id>@lid`, shown as hidden (D129) |
+| Escape in a popover also closing the dialog     | React's root is the document; stop it with a native listener on the trigger        |
+| A new route failing the first typecheck         | `npm run typecheck` runs `next typegen` first; keep it that way                    |
 
 ---
 

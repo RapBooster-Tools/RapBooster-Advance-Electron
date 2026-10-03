@@ -47,13 +47,17 @@ Twelve screens behind a license activation gate: **Dashboard** · **Inbox** · *
   the background when the window is closed, optional start at login
 - **Look:** light and dark themes that follow Windows or macOS, and a WhatsApp-style phone
   preview; every file is chosen with a normal file dialog
+- **Help:** a first-run welcome and a getting-started checklist, a "?" and F1 help on every
+  screen, tips beside every setting, guided tours, a Help Center, and a
+  [user guide](./docs/USER-GUIDE.md) generated from the same content
 
 Every send — campaign, sequence, group, flow, welcome or away, scheduled message, AI or a
 person in the inbox — goes through one pacing engine, so the safety limits always hold.
 
 ## Requirements
 
-- **Node.js 20 or newer**
+- **Node.js 22.18 or newer** — `npm run verify` generates the user guide from TypeScript help
+  content using Node's built-in type stripping
 - **Windows or macOS.** Each platform's installer is built on that platform — the native
   modules are per-OS binaries. See [RELEASE.md](./RELEASE.md).
 - No Python or C++ toolchain needed. Electron is pinned to 44.5.1 so the `better-sqlite3`

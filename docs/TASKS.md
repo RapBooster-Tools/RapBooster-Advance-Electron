@@ -39,8 +39,8 @@ _Customer_
 | [10. Devices and safety](#10-devices-and-safety)                                  | 12   | 0    |
 | [11. Docs](#11-docs)                                                              | 5    | 0    |
 | [12. Packaging](#12-packaging)                                                    | 9    | 0    |
-| [13. Wave 3 — workspace, automation, help](#13-wave-3--workspace-automation-help) | 11   | 4    |
-| [14. Known gaps](#14-known-gaps)                                                  | 3    | 39   |
+| [13. Wave 3 — workspace, automation, help](#13-wave-3--workspace-automation-help) | 15   | 0    |
+| [14. Known gaps](#14-known-gaps)                                                  | 3    | 40   |
 | [15. Blocked on the customer](#15-blocked-on-the-customer)                        | 0    | 6    |
 | [16. Release](#16-release)                                                        | 0    | 7    |
 
@@ -190,7 +190,7 @@ _Customer_
 
 Customer decisions D122–D125 (2026-10-03). T-1301–T-1311 merged to `main` on 2026-10-03
 (`a1a4e73`); spec and test IDs in [SPRINTS.md §16](../SPRINTS.md#16-wave-3--workspace-automation-and-design-system).
-The help system (T-1312–T-1315) is Wave 4, SPRINTS.md §17.
+The help system (T-1312–T-1315) is Wave 4, SPRINTS.md §17 — complete.
 
 - [x] **T-1301** ✅ Design system: tokens, primitives, light and dark themes, grouped shell, WhatsApp phone preview — _Design agent_ · D122, D145 · E7.1–E7.10 · [DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md)
 - [x] **T-1302** ✅ Docs restructure: DECISIONS, TASKS, ROADMAP, tracker dashboard — _Docs agent_
@@ -203,10 +203,10 @@ The help system (T-1312–T-1315) is Wave 4, SPRINTS.md §17.
 - [x] **T-1309** ✅ WhatsApp contacts grabber: address book **and chats** (incl. unsaved numbers) to a list — _Contacts agent_ · D125, D128, D140 · E8.50–E8.59
 - [x] **T-1310** ✅ Excel (.xlsx) and vCard (.vcf) import — _Contacts agent_ · D125, D136–D139 · E8.40–E8.48
 - [x] **T-1311** ✅ Native file picker wherever a path was typed (contacts, opt-outs, broadcast and template media, voice, sticker) — _Contacts agent_, _Coordinator_ · D96, D141 · E8.17, E8.47
-- [ ] **T-1312** 🟡 First-run setup wizard: link a device → import contacts → first template → first campaign — _Help agent_ · D123
-- [ ] **T-1313** 🟡 Help panel and tooltips on every screen — _Help agent_ · D123
-- [ ] **T-1314** 🟡 Interactive guided tours — _Help agent_ · D123
-- [ ] **T-1315** 🟡 In-app Help Center and [USER-GUIDE.md](./USER-GUIDE.md) — _Help agent_ · D123
+- [x] **T-1312** ✅ First-run welcome and a self-ticking getting-started checklist: link a device → import contacts → first template → first campaign — _Help agent_ · D123, D155 · E9.16–E9.20
+- [x] **T-1313** ✅ Help drawer ("?", F1, per-panel topics, search) and InfoTips on every non-obvious setting — _Help agent_ · D123, D153, D156 · E9.2–E9.7
+- [x] **T-1314** ✅ Interactive guided tours for 8 screens, offered once per screen — _Help agent_ · D123 · E9.8, E9.9, E9.17
+- [x] **T-1315** ✅ Help Center (`/help`) and a generated [USER-GUIDE.md](./USER-GUIDE.md) — _Help agent_ · D123, D153 · E9.10–E9.14
 
 ## 14. Known gaps
 
@@ -258,6 +258,7 @@ Found in Wave 3 (2026-10-03). The epic is the first word of each title.
 - [ ] **T-1440** ⬜ Design: phone preview in the template, campaign and sequence composers — today only in Settings › Appearance — _Unassigned_ · D122
 - [ ] **T-1441** ⬜ Desktop: numeric unread badge on Windows (taskbar overlay) — today the button only flashes — _Unassigned_ · D142 · K26
 - [ ] **T-1442** ⬜ Release: verify on a real Windows and macOS machine — tray clicks, OS notifications and their click-through, start at login, Baileys tapped buttons and list replies, and LID chats showing real numbers — _Unassigned_, needs _Customer_ · D142, D143, D147 · K25, REQUIREMENTS §10
+- [ ] **T-1443** ⬜ Devices: a way to remove a logged-out device card (it still counts toward the 20) — _Unassigned_
 
 ## 15. Blocked on the customer
 

@@ -156,12 +156,12 @@ Import from `@renderer/components/ui/<name>`. Every one forwards `data-testid` (
 
 Layout:
 
-| Component     | Notes                                                                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AppShell`    | Title bar (product name, theme toggle, `headerHelp` slot for the future "?" button) over the grouped, collapsible sidebar. Skip-to-content link. |
-| `PageHeader`  | `title` (h1, `data-testid="page-title"`), `description`, `actions`, `helpSlot`                                                                   |
-| `ThemeToggle` | `variant="compact"` (title bar) or `"cards"` (Settings); test ids `<prefix>-light`, `<prefix>-dark`, `<prefix>-system`                           |
-| `nav.ts`      | `NAV_GROUPS` (Overview · Messaging · Audience · Automation · Setup) and `ALL_NAV`                                                                |
+| Component     | Notes                                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppShell`    | Title bar (product name, theme toggle, `headerHelp` slot, filled by the help system's "?" button) over the grouped, collapsible sidebar. Skip-to-content link. |
+| `PageHeader`  | `title` (h1, `data-testid="page-title"`), `description`, `actions`, `helpSlot`                                                                                 |
+| `ThemeToggle` | `variant="compact"` (title bar) or `"cards"` (Settings); test ids `<prefix>-light`, `<prefix>-dark`, `<prefix>-system`                                         |
+| `nav.ts`      | `NAV_GROUPS` (Overview · Messaging · Audience · Automation · Setup) and `ALL_NAV`                                                                              |
 
 ### Phone preview
 

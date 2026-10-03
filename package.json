@@ -6,6 +6,9 @@
   "license": "UNLICENSED",
   "author": "Punit",
   "main": "out/main/index.js",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "concurrently -k -n renderer,electron -c cyan,magenta \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:mock": "node scripts/dev-mock.mjs",
@@ -17,7 +20,7 @@
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
     "pack": "npm run build && electron-builder --dir",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p renderer/tsconfig.json",
+    "typecheck": "next typegen renderer && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p renderer/tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",

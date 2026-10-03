@@ -31,7 +31,7 @@ application.
 14. [Dependency manifest](#14-dependency-manifest)
 15. [Sprint 5 — Marketing suite (D89)](#15-sprint-5--marketing-suite-d89)
 16. [Wave 3 — Workspace, automation and design system](#16-wave-3--workspace-automation-and-design-system)
-17. [Wave 4 — Help system (E9.x), in progress](#17-wave-4--help-system-e9x-in-progress)
+17. [Wave 4 — Help system](#17-wave-4--help-system)
 
 ---
 
@@ -2084,7 +2084,69 @@ E8.74–E8.79 are unused.
 
 ---
 
-## 17. Wave 4 — Help system (E9.x), in progress
+## 17. Wave 4 — Help system
 
-Setup wizard, help on every screen, guided tours and the Help Center (D123, T-1312–T-1315).
-Specified here when it merges.
+The customer asked for "fully documented UI/UX so that there is no learning curve for
+non-technical users" and chose all four of: a first-run wizard, help on every screen, guided
+tours and a full user guide (D123).
+
+### 17.1 Features
+
+- **Help drawer** — "?" in the title bar and beside every screen title, and F1. Opens on the
+  current screen's topic, or the focused panel's (`data-help`), including inside dialogs;
+  searches all help; "Take the tour" and "Open Help Center".
+- **InfoTips** beside every non-obvious setting: pacing, daily cap, quiet hours, warmup,
+  spintax, merge tags, sequence delays, AI settings, flow triggers and priority, duplicate
+  policy, dial prefix, number check, keyword cooldown, away interval.
+- **Guided tours** for Dashboard, Devices, Contacts, Templates, Campaigns, Inbox, Automation
+  and AI Bot — no dependency; Back/Next/Skip, arrow keys, focus kept in the popover, missing
+  targets skipped, reduced motion respected. Offered once per screen on first visit.
+- **First-run welcome** with the safety limits that are really on, then a Dashboard
+  **getting-started checklist** that ticks itself from real data; "Show me" opens the screen
+  and starts its tour (D155).
+- **Help Center** (`/help`, Setup group): every topic, search, troubleshooting, safety rules,
+  glossary, shortcuts, restart any tour, bring back the checklist, export diagnostics.
+- **User guide** — `docs/USER-GUIDE.md`, generated from the same content (D153).
+
+### 17.2 Architecture
+
+- `renderer/help/` — typed content: `topics/*` per screen and Settings section, `fields.ts`,
+  `glossary.ts`, `troubleshooting.ts`, `safety.ts`, `getting-started.ts`, `tours.ts`,
+  `search.ts`.
+- `renderer/components/help/` — provider, drawer, tour engine, welcome, checklist.
+- `scripts/build-user-guide.mjs` (`npm run docs:guide`); `check:guide` runs in `verify`.
+- State: `app:getPrefs`/`app:setPrefs` (`onboardingCompleted`, `toursSeen`) and the Setting
+  row `help.checklist`. Test seam `RB_ONBOARDING=1` (D154). No contract or schema change.
+
+### 17.3 Acceptance criteria
+
+- Every screen and Settings section has a help topic; every tour target and `data-help` id
+  exists (E9.15).
+- The guide on disk always matches the in-app content (E9.14, `check:guide`).
+- No welcome, tour offer or checklist appears under test unless a spec opts in (E9.1).
+- Help is readable in both themes (E9.13).
+
+### 17.4 E2E
+
+| ID    | Test                                                                          |
+| ----- | ----------------------------------------------------------------------------- |
+| E9.1  | under test without RB_ONBOARDING there is no welcome, tour offer or checklist |
+| E9.2  | the title-bar "?" opens help for the current screen; Escape closes it         |
+| E9.3  | F1 opens the right topic on each screen and closes it again                   |
+| E9.4  | F1 inside a panel opens help on that panel                                    |
+| E9.5  | the "?" beside a screen title opens that screen's help                        |
+| E9.6  | help search finds a task across screens and opens it highlighted              |
+| E9.7  | an InfoTip beside a setting shows its explanation                             |
+| E9.8  | a guided tour runs from start to finish                                       |
+| E9.9  | tours use the keyboard, skip missing targets and can be skipped               |
+| E9.10 | Help Center lists every topic, searches, and has a glossary                   |
+| E9.11 | Help Center restarts a tour on its own screen                                 |
+| E9.12 | Help Center brings the getting-started checklist back                         |
+| E9.13 | help is readable in dark mode                                                 |
+| E9.14 | docs/USER-GUIDE.md is up to date with the help content                        |
+| E9.15 | every tour target and data-help id exists in the screens                      |
+| E9.16 | a fresh install is welcomed with the safety limits that are really on         |
+| E9.17 | each screen offers its tour once, and only once                               |
+| E9.18 | checklist steps tick themselves as a device links and contacts arrive         |
+| E9.19 | "Show me" opens the screen and starts its tour                                |
+| E9.20 | onboarding is remembered after a restart                                      |
