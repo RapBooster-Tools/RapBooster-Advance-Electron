@@ -1,9 +1,9 @@
 /**
  * The one contact-import pipeline.
  *
- * CSV files and Google Sheets both land here, so a sheet import gets exactly
- * the same mapping, normalization, duplicate policy and error report as a CSV
- * import. Two pipelines would drift, and the drift would only show up as a
+ * CSV, Excel (.xlsx) and contact-card (.vcf) files and Google Sheets all land
+ * here, so every source gets exactly the same mapping, normalization,
+ * duplicate policy and error report. Two pipelines would drift, and the drift would only show up as a
  * list that imported differently depending on where it came from.
  */
 import { mkdirSync } from 'node:fs'
@@ -11,16 +11,19 @@ import { join } from 'node:path'
 import { getPrisma } from '../db/client'
 import { userDataDir } from '../db/paths'
 import {
-  importCsv,
+  importRows,
   type DuplicatePolicy,
   type ImportOutcome,
   type ImportRow,
 } from './csv'
+import { openRowSource } from './import/row-source'
+
+export { previewImportFile } from './import/row-source'
 
 export interface ContactImportRequest {
   listId: string
   filePath: string
-  /** CSV header -> list field name. */
+  /** Source column header -> list field name. */
   mapping: Record<string, string>
   duplicatePolicy: DuplicatePolicy
   /** Null means the file's numbers already carry their country code. */
@@ -106,11 +109,15 @@ async function writeBatch(
   return { written: result.count, skipped }
 }
 
-/** Stream `filePath` into `listId`. Throws plain errors; callers map them. */
+/**
+ * Stream `filePath` (.csv, .xlsx or .vcf) into `listId`. Throws AppError for an
+ * unsupported or unreadable file and plain errors otherwise; callers map them.
+ */
 export async function runContactImport(
   req: ContactImportRequest,
 ): Promise<ImportOutcome> {
-  const outcome = await importCsv(req.filePath, req.mapping, {
+  const source = await openRowSource(req.filePath)
+  const outcome = await importRows(source, req.mapping, {
     ...(req.dialPrefix ? { dialPrefix: req.dialPrefix } : {}),
     exportsDir: exportsDir(),
     writeBatch: (rows) => writeBatch(req.listId, req.duplicatePolicy, rows),

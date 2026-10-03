@@ -11,10 +11,11 @@ import { REQUIRED_CONTACT_FIELDS } from '../../../shared/types'
 import { getPrisma } from '../db/client'
 import {
   exportsDir,
+  previewImportFile,
   refreshListCount,
   runContactImport,
 } from '../services/contact-import'
-import { exportCsv, previewCsv } from '../services/csv'
+import { exportCsv } from '../services/csv'
 import { normalizePhone } from '../services/phone'
 import type { WaNumberStatus } from '../../../shared/types'
 import { registerHandler } from './router'
@@ -283,8 +284,9 @@ export function registerContactHandlers(): void {
 
   registerHandler('contacts:importPreview', async ({ filePath }) => {
     try {
-      return await previewCsv(filePath)
+      return await previewImportFile(filePath)
     } catch (err) {
+      if (err instanceof AppError) throw err
       throw new AppError('IMPORT_FAILED', {
         userMessage: err instanceof Error ? err.message : 'The file could not be read.',
         detail: String(err),
@@ -305,6 +307,7 @@ export function registerContactHandlers(): void {
           dialPrefix,
         })
       } catch (err) {
+        if (err instanceof AppError) throw err
         throw new AppError('IMPORT_FAILED', {
           userMessage: err instanceof Error ? err.message : 'The import failed.',
           detail: `list=${list.name}: ${String(err)}`,

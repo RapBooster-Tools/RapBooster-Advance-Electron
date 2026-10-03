@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { FilePickerField } from '@renderer/components/common/file-picker-field'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
 
@@ -27,8 +28,8 @@ export function OptOutImport({
   const [busy, setBusy] = useState(false)
 
   async function runImport() {
-    if (filePath.trim() === '') {
-      toast('error', 'Enter the path of a CSV or TXT file.')
+    if (filePath === '') {
+      toast('error', 'Choose a CSV or TXT file first.')
       return
     }
     const digits = prefix.trim().replace(/^\+/, '').replace(/^00/, '').replace(/\D/g, '')
@@ -40,7 +41,7 @@ export function OptOutImport({
 
     setBusy(true)
     const result = await window.api.invoke('suppression:import', {
-      filePath: filePath.trim(),
+      filePath,
       dialPrefix: country === 'apply' ? dialPrefix : null,
     })
     setBusy(false)
@@ -59,17 +60,14 @@ export function OptOutImport({
 
   return (
     <section className="flex flex-wrap items-end gap-2 rounded-card border border-line bg-surface p-4">
-      <div className="flex min-w-60 flex-1 flex-col gap-1.5">
-        <label htmlFor="optout-import-path" className="text-xs font-semibold text-ink">
-          Import a CSV or TXT file
-        </label>
-        <input
-          id="optout-import-path"
-          data-testid="optout-import-path"
+      <div className="min-w-60 flex-1">
+        <FilePickerField
+          label="Import a CSV or TXT file"
           value={filePath}
-          onChange={(e) => setFilePath(e.target.value)}
-          placeholder="C:\Users\you\do-not-contact.csv"
-          className={`${INPUT} font-mono text-xs`}
+          onChange={setFilePath}
+          filters={[{ name: 'Number lists', extensions: ['csv', 'txt'] }]}
+          dialogTitle="Choose a do-not-contact file"
+          testId="optout-import-path"
         />
       </div>
       <select
