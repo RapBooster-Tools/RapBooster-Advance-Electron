@@ -322,6 +322,19 @@ export class MockTransport extends TransportEmitter implements Transport {
         current.connected = true
         this.emit('status', deviceId, 'connected', { phone: current.phone })
 
+        // The phone's address book, as WhatsApp's history sync would deliver
+        // it: 12 contacts, three without a saved name, one shared with the
+        // fixture groups so de-duplication is exercised.
+        const book = Array.from({ length: 12 }, (_, i) => {
+          const phone = i === 0 ? memberPhone(1, 1) : `+9197${String(i).padStart(8, '0')}`
+          return {
+            jid: jidOf(phone),
+            phone,
+            name: i % 4 === 3 ? null : `Book Contact ${i + 1}`,
+          }
+        })
+        this.emit('contacts', deviceId, book)
+
         // Inbox specs need inbound traffic. Driving it from here rather than
         // exposing a "simulate" IPC channel keeps the test hook inside code that
         // is already test-only — production never ships this transport.

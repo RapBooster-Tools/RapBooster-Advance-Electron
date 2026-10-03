@@ -96,6 +96,31 @@ export const IPC_CHANNELS = [
   'system:checkUpdate',
   'system:waServiceState',
 
+  // Wave 3: inbox productivity, flows, address book, desktop
+  'quickReply:list',
+  'quickReply:create',
+  'quickReply:update',
+  'quickReply:delete',
+  'quickReply:use',
+  'chat:notes',
+  'chat:addNote',
+  'chat:deleteNote',
+  'chat:profile',
+  'scheduledMessage:list',
+  'scheduledMessage:create',
+  'scheduledMessage:cancel',
+  'flow:list',
+  'flow:create',
+  'flow:update',
+  'flow:delete',
+  'flow:simulate',
+  'autoreply:getConfig',
+  'autoreply:setConfig',
+  'waContacts:list',
+  'waContacts:export',
+  'app:getPrefs',
+  'app:setPrefs',
+
   // Marketing suite (D89)
   'chat:sendRich',
   'tag:list',
@@ -188,6 +213,8 @@ export const IPC_EVENTS = [
   'chat:updated',
   'device:updated',
   'sequence:changed',
+  'app:navigate',
+  'scheduledMessage:changed',
 ] as const
 
 export type IpcChannelName = (typeof IPC_CHANNELS)[number]

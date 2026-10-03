@@ -72,6 +72,7 @@ model Device {
   channels        Channel[]
   scheduledPosts  ScheduledPost[]
   callEvents      CallEvent[]
+  waContacts      WaContact[]
 
   @@index([status])
 }
@@ -385,12 +386,19 @@ model Chat {
   unreadCount     Int       @default(0)
   isEscalated     Boolean   @default(false)
   escalatedAt     DateTime?
+  /// When the welcome message went out — at most once per chat.
+  welcomedAt      DateTime?
+  /// Last away message, so it repeats at most once per cooldown.
+  lastAwayAt      DateTime?
   autoReplyOptOut Boolean   @default(false)
   createdAt       DateTime  @default(now())
 
-  device   Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  messages Message[]
-  drafts   AiDraft[]
+  device    Device             @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  drafts    AiDraft[]
+  notes     ChatNote[]
+  scheduled ScheduledMessage[]
+  flowState FlowSession?
 
   @@index([deviceId, lastMessageAt])
 }
@@ -681,4 +689,106 @@ model CallEvent {
   device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
   @@index([deviceId, at])
+}
+
+// ───────────────────────────── Inbox productivity (Wave 3) ─────────────────────────────
+
+/// Saved answer inserted from the composer with "/shortcut". Merge tags allowed.
+model QuickReply {
+  id        String   @id @default(cuid())
+  shortcut  String   @unique
+  title     String
+  body      String
+  useCount  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A private note on a conversation, visible only inside the app.
+model ChatNote {
+  id        String   @id @default(cuid())
+  chatId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+}
+
+/// A one-off reply written now and sent later from the chat window.
+model ScheduledMessage {
+  id        String    @id @default(cuid())
+  chatId    String
+  body      String    @default("")
+  mediaPath String?
+  sendAt    DateTime
+  /// scheduled | sending | sent | failed | cancelled
+  status    String    @default("scheduled")
+  messageId String?
+  error     String?
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([status, sendAt])
+  @@index([chatId])
+}
+
+// ─────────────────────────────── Chatbot flows (Wave 3) ───────────────────────────────
+
+/// A visual menu flow ("Reply 1 for prices…"). The graph is JSON validated by
+/// shared/flow.ts; flows run before keyword rules and the AI bot.
+model ChatbotFlow {
+  id        String   @id @default(cuid())
+  name      String
+  enabled   Boolean  @default(true)
+  /// keywords | new_chat | any
+  trigger   String   @default("keywords")
+  keywords  String   @default("[]")
+  /// Devices this flow answers on; empty = all.
+  deviceIds String   @default("[]")
+  priority  Int      @default(0)
+  graph     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions FlowSession[]
+
+  @@index([enabled, priority])
+}
+
+/// Where a chat currently is inside a flow. One active flow per chat.
+model FlowSession {
+  chatId    String   @id
+  flowId    String
+  nodeId    String
+  /// Answers collected so far, as JSON.
+  vars      String   @default("{}")
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
+
+  chat Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  flow ChatbotFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────── WhatsApp address book (Wave 3) ───────────────────────────
+
+/// Contacts each linked phone knows (its address book and chats), as reported
+/// by WhatsApp. The grabber exports these into a contact list.
+model WaContact {
+  deviceId  String
+  jid       String
+  phone     String
+  name      String?
+  updatedAt DateTime @updatedAt
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, jid])
+  @@index([phone])
 }

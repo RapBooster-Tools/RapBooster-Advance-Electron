@@ -105,6 +105,9 @@ async function main(): Promise<void> {
   transport.on('labelAssociation', (deviceId, association) =>
     emit('labelAssociation', { deviceId, ...association }),
   )
+  transport.on('contacts', (deviceId, contacts) =>
+    emit('contacts', { deviceId, contacts }),
+  )
 
   async function handle<K extends WaRequestKind>(
     envelope: WaRequestEnvelope<K>,

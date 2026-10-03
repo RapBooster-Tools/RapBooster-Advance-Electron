@@ -33,6 +33,10 @@ import { registerAutomationHandlers } from './ipc/automation.ipc'
 import { registerSequenceHandlers } from './ipc/sequence.ipc'
 import { registerAiHandlers } from './ipc/ai.ipc'
 import { registerDeviceExtraHandlers } from './ipc/device-extra.ipc'
+import { registerInboxToolHandlers } from './ipc/inbox-tools.ipc'
+import { registerFlowHandlers } from './ipc/flows.ipc'
+import { registerWaContactHandlers } from './ipc/wa-contacts.ipc'
+import { registerAppPrefHandlers } from './ipc/app-prefs.ipc'
 import { handleInbound } from './services/inbound'
 import { recordReceipt } from './services/attribution'
 import { handleIncomingCall } from './services/calls'
@@ -52,6 +56,15 @@ import { webhookTick } from './services/webhooks'
 import { warmupTick } from './services/warmup'
 import { postTick } from './services/post-scheduler'
 import { heldDraftTick } from './services/ai/drafts'
+import { scheduledMessageTick } from './services/scheduled-messages'
+import { flowTick } from './services/flows/engine'
+import { persistWaContacts } from './services/wa-contacts'
+import {
+  attachWindow,
+  initDesktop,
+  keepRunningInBackground,
+  notifyIncoming,
+} from './services/desktop'
 import { emitToAll } from './ipc/router'
 import { waBridge } from './wa-bridge'
 import { campaignEngine } from './services/campaign-engine'
@@ -142,6 +155,7 @@ function createWindow(): void {
 
   win.once('ready-to-show', () => win.show())
   applyWindowSecurity(win, RENDERER_URL)
+  attachWindow(win)
   mainWindow = win
 
   const route = entryRoute()
@@ -282,6 +296,12 @@ function startWaService(): void {
         // reconnect, and showing the same message twice looks like a bug.
         if (!saved) return
         emitToAll(windows(), 'message:received', { chatId: saved.chatId, message: saved })
+        notifyIncoming({
+          chatId: saved.chatId,
+          chatName: message.pushName ?? message.from,
+          preview: saved.body,
+          isGroup: message.isGroup,
+        })
 
         // Everything else — opt-outs, attribution, rules, the bot — runs after
         // the message is stored and shown, so the user sees it immediately.
@@ -330,6 +350,13 @@ function startWaService(): void {
     )
   })
 
+  // The phone's address book, synced by WhatsApp on link (contacts grabber).
+  waBridge.on('contacts', ({ deviceId, contacts }) => {
+    void persistWaContacts(deviceId, contacts).catch((err: unknown) =>
+      console.error('could not store synced WhatsApp contacts', err),
+    )
+  })
+
   waBridge.on('log', ({ level, message }) => {
     if (level === 'error') console.error(`[wa-service] ${message}`)
     else if (level === 'warn') console.warn(`[wa-service] ${message}`)
@@ -359,6 +386,8 @@ function startWaService(): void {
   registerJob('webhooks', webhookTick)
   registerJob('warmup', warmupTick)
   registerJob('held AI replies', heldDraftTick)
+  registerJob('scheduled messages', scheduledMessageTick)
+  registerJob('flows', flowTick)
   startScheduler()
 }
 
@@ -431,6 +460,10 @@ async function bootUi(): Promise<void> {
   registerSequenceHandlers()
   registerAiHandlers()
   registerDeviceExtraHandlers()
+  registerInboxToolHandlers()
+  registerFlowHandlers()
+  registerWaContactHandlers()
+  registerAppPrefHandlers()
 
   startWaService()
   const pending = unregisteredChannels()
@@ -447,6 +480,7 @@ async function bootUi(): Promise<void> {
   }
 
   createWindow()
+  initDesktop()
 
   // Updates: wired against the feed from REQUIREMENTS §3. Until that is
   // supplied the feed is a placeholder and checks report "not configured"
@@ -467,8 +501,10 @@ async function bootUi(): Promise<void> {
   // Platform convention (tracker D85). On Windows closing the last window quits.
   // On macOS the app stays in the Dock — campaigns keep sending — and clicking
   // the Dock icon brings a window back.
+  // With "keep running in the background" on, Windows behaves like macOS: the
+  // tray icon keeps campaigns and the inbox alive.
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    if (process.platform !== 'darwin' && !keepRunningInBackground()) app.quit()
   })
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

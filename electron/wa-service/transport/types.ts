@@ -79,6 +79,10 @@ export interface TransportEvents {
     deviceId: string,
     association: { labelId: string; chatJid: string; action: 'add' | 'remove' },
   ) => void
+  contacts: (
+    deviceId: string,
+    contacts: Array<{ jid: string; phone: string; name: string | null }>,
+  ) => void
 }
 
 type Payload<K extends keyof WaRequests> = Omit<WaRequests[K], 'deviceId'>

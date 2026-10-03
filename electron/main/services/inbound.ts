@@ -8,8 +8,10 @@
  *   2. Reply attribution — credit the campaign that prompted the message.
  *   3. Drip sequences — a reply stops the sequence for that number.
  *   4. Webhooks — `message.received` for integrations.
- *   5. Keyword rules — deterministic answers, before any model is called.
- *   6. The AI bot — last, and only if nothing above answered.
+ *   5. Welcome / away messages — sent alongside, never instead of, what follows.
+ *   6. Chatbot flows — a customer mid-menu must get the menu's next step.
+ *   7. Keyword rules — deterministic answers, before any model is called.
+ *   8. The AI bot — last, and only if nothing above answered.
  *
  * Each step is isolated: a failure is logged and the next step still runs,
  * because one broken integration must not silence the inbox.
@@ -18,6 +20,8 @@ import type { MessageType } from '../../../shared/types'
 import { getPrisma } from '../db/client'
 import { maybeReply } from './ai/responder'
 import { attributeReply } from './attribution'
+import { sendWelcomeOrAway } from './auto-replies'
+import { tryFlow } from './flows/engine'
 import { tryKeywordReply } from './keyword-rules'
 import { notify, toast } from './notify'
 import { handleOptOut } from './optout'
@@ -99,6 +103,11 @@ export async function handleInbound(ctx: InboundContext): Promise<void> {
   )
 
   if (ctx.isGroup) return
+
+  await step('welcome/away', () => sendWelcomeOrAway(ctx))
+
+  const inFlow = await step('chatbot flow', () => tryFlow(ctx))
+  if (inFlow) return
 
   const answered = await step('keyword rules', () => tryKeywordReply(ctx))
   if (answered) return

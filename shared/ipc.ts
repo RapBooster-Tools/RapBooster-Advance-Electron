@@ -19,6 +19,7 @@ import { automationChannels, automationEvents } from './contract/automation'
 import { broadcastChannels, broadcastEvents } from './contract/broadcast'
 import { groupChannels } from './contract/groups'
 import { messagingChannels, messagingEvents } from './contract/messaging'
+import { workspaceChannels, workspaceEvents } from './contract/workspace'
 import { inboxRichMessage, richPayload } from './rich-message'
 import {
   campaignStatus,
@@ -678,6 +679,7 @@ export const ipcContract = {
   ...broadcastChannels,
   ...messagingChannels,
   ...automationChannels,
+  ...workspaceChannels,
 } as const
 
 export type IpcContract = typeof ipcContract
@@ -751,6 +753,7 @@ export const ipcEvents = {
   ...broadcastEvents,
   ...messagingEvents,
   ...automationEvents,
+  ...workspaceEvents,
 } as const
 
 export type IpcEvents = typeof ipcEvents

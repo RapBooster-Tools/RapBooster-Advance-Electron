@@ -328,6 +328,11 @@ export interface WaEvents {
     chatJid: string
     action: 'add' | 'remove'
   }
+  /** Address-book / chat contacts the phone knows, as WhatsApp syncs them. */
+  contacts: {
+    deviceId: string
+    contacts: Array<{ jid: string; phone: string; name: string | null }>
+  }
   /** Emitted after the reconnect budget is exhausted, so main can inform the user. */
   giveUp: { deviceId: string; attempts: number; detail: string }
   log: { level: 'info' | 'warn' | 'error'; message: string }

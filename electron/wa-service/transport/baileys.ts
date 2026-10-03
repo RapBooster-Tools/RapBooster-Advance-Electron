@@ -22,6 +22,7 @@ import makeWASocket, {
   jidNormalizedUser,
   proto,
   useMultiFileAuthState,
+  type Contact,
   type WAMessage,
   type WASocket,
 } from 'baileys'
@@ -363,6 +364,31 @@ export class BaileysTransport extends TransportEmitter implements Transport {
         })
       }
     })
+
+    // The phone's address book arrives in pieces: the initial history sync,
+    // then upserts and updates. Only entries with a real phone number are
+    // useful to the grabber; LID-only contacts cannot be messaged by number.
+    const forwardContacts = (raw: Array<Partial<Contact>>) => {
+      const contacts = raw.flatMap((c) => {
+        const pn = [c.phoneNumber, c.id].find(
+          (j): j is string => typeof j === 'string' && j.endsWith('@s.whatsapp.net'),
+        )
+        if (!pn) return []
+        const digits = (pn.split('@')[0] ?? '').split(':')[0] ?? ''
+        if (digits.length < 7) return []
+        return [
+          {
+            jid: pn,
+            phone: `+${digits}`,
+            name: c.name ?? c.notify ?? c.verifiedName ?? null,
+          },
+        ]
+      })
+      if (contacts.length > 0) this.emit('contacts', deviceId, contacts)
+    }
+    socket.ev.on('messaging-history.set', ({ contacts }) => forwardContacts(contacts))
+    socket.ev.on('contacts.upsert', (contacts) => forwardContacts(contacts))
+    socket.ev.on('contacts.update', (contacts) => forwardContacts(contacts))
 
     socket.ev.on('labels.edit', (label) => {
       this.emit('label', deviceId, {
