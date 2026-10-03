@@ -690,7 +690,11 @@ test.describe('rich messages', () => {
   })
 
   test('E5.50 — the inbox attach menu sends a poll into the open chat', async () => {
-    const s = await launch({ WA_MOCK_INCOMING: '1' })
+    // The sticker is chosen with the file picker, which RB_PICK_FILE answers.
+    const pickDir = mkdtempSync(join(tmpdir(), 'rapbooster-pick-'))
+    const png = join(pickDir, 'smile.png')
+    writeFileSync(png, Buffer.alloc(2048, 1))
+    const s = await launch({ WA_MOCK_INCOMING: '1', RB_PICK_FILE: png })
     try {
       await connectDevice(s.win)
       await s.win.getByTestId('nav-inbox').click()
@@ -721,12 +725,13 @@ test.describe('rich messages', () => {
       // A bad sticker is reported in the dialog and nothing is sent.
       await s.win.getByTestId('rich-attach').click()
       await s.win.getByTestId('rich-option-sticker').click()
-      await s.win.getByTestId('rich-file-path').fill(s.files.png)
+      await s.win.getByTestId('rich-pick-file').click()
       await s.win.getByTestId('rich-send').click()
       await expect(s.win.getByTestId('rich-error')).toContainText('.webp')
       expect(readSends(s.logPath)).toHaveLength(1)
     } finally {
       await s.cleanup()
+      rmSync(pickDir, { recursive: true, force: true })
     }
   })
 })
