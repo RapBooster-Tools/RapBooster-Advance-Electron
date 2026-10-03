@@ -2,13 +2,17 @@
 
 import { useState } from 'react'
 import { CallsPanel } from '@renderer/components/automation/calls-panel'
+import { FlowsPanel } from '@renderer/components/automation/flows/flows-panel'
 import { RulesPanel } from '@renderer/components/automation/rules-panel'
+import { WelcomeAwayPanel } from '@renderer/components/automation/welcome-away-panel'
 import { WebhooksPanel } from '@renderer/components/automation/webhooks-panel'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { cn } from '@renderer/lib/cn'
 
 const TABS = [
+  { id: 'flows', label: 'Chatbot flows' },
   { id: 'rules', label: 'Keyword rules' },
+  { id: 'welcome', label: 'Welcome & away' },
   { id: 'webhooks', label: 'Webhooks' },
   { id: 'calls', label: 'Calls' },
 ] as const
@@ -22,7 +26,7 @@ export default function AutomationPage() {
     <>
       <PageHeader
         title="Automation"
-        description="Keyword auto-replies, webhooks and call handling"
+        description="Chatbot flows, keyword auto-replies, welcome and away messages, webhooks and call handling"
       />
       <div className="flex gap-1 border-b border-line px-6 pt-3" role="tablist">
         {TABS.map((t) => (
@@ -45,7 +49,9 @@ export default function AutomationPage() {
         ))}
       </div>
       <div className="p-6" role="tabpanel">
+        {tab === 'flows' && <FlowsPanel />}
         {tab === 'rules' && <RulesPanel />}
+        {tab === 'welcome' && <WelcomeAwayPanel />}
         {tab === 'webhooks' && <WebhooksPanel />}
         {tab === 'calls' && <CallsPanel />}
       </div>
