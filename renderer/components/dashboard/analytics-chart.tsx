@@ -64,6 +64,7 @@ export function AnalyticsChart({ days }: { days: Day[] }) {
     <section
       className="rounded-card border border-line bg-surface p-4"
       data-testid="analytics-chart"
+      data-tour="dashboard-chart"
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">Last 7 days</h2>

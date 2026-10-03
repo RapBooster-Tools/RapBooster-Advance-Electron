@@ -9,13 +9,16 @@ export function Panel({
   title,
   children,
   actions,
+  tour,
 }: {
   title: string
   children: ReactNode
   actions?: ReactNode
+  /** `data-tour` target for the guided tour. */
+  tour?: string
 }) {
   return (
-    <section className="rounded-card border border-line bg-surface p-4">
+    <section className="rounded-card border border-line bg-surface p-4" data-tour={tour}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {actions}
@@ -30,17 +33,23 @@ export function Field({
   htmlFor,
   children,
   hint,
+  info,
 }: {
   label: string
   htmlFor: string
   children: ReactNode
   hint?: string
+  /** A "?" InfoTip beside the label. */
+  info?: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-xs font-semibold text-ink">
-        {label}
-      </label>
+      <span className="flex items-center gap-1">
+        <label htmlFor={htmlFor} className="text-xs font-semibold text-ink">
+          {label}
+        </label>
+        {info}
+      </span>
       {children}
       {hint && <p className="text-xs text-ink-subtle">{hint}</p>}
     </div>
@@ -57,6 +66,7 @@ export function NumberField({
   max,
   step,
   hint,
+  info,
   testId,
 }: {
   id: string
@@ -67,10 +77,11 @@ export function NumberField({
   max: number
   step?: number
   hint?: string
+  info?: ReactNode
   testId?: string
 }) {
   return (
-    <Field label={label} htmlFor={id} hint={hint}>
+    <Field label={label} htmlFor={id} hint={hint} info={info}>
       <input
         id={id}
         type="number"

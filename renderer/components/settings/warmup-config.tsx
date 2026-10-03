@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useToast } from '@renderer/components/providers/toast-provider'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import type { IpcResponse } from '@shared/ipc'
@@ -46,18 +47,21 @@ export function WarmupConfigPanel() {
         each device&rsquo;s daily cap.
       </p>
       <div className="mt-2 flex flex-wrap items-end gap-4">
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            className="size-4 accent-primary"
-            checked={current.autoConversations}
-            onChange={(e) =>
-              setEdits((x) => ({ ...x, autoConversations: e.target.checked }))
-            }
-            data-testid="warmup-auto"
-          />
-          Warmup conversations between my devices
-        </label>
+        <span className="flex items-center gap-1">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={current.autoConversations}
+              onChange={(e) =>
+                setEdits((x) => ({ ...x, autoConversations: e.target.checked }))
+              }
+              data-testid="warmup-auto"
+            />
+            Warmup conversations between my devices
+          </label>
+          <FieldHelp id="warmup-conversations" />
+        </span>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="warmup-per-day" className="text-xs font-semibold text-ink">
             Conversations per day

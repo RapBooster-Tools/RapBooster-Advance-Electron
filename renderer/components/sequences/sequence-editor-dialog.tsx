@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
@@ -165,18 +166,24 @@ export function SequenceEditorDialog({
           </div>
         </fieldset>
 
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            data-testid="seq-stop-on-reply"
-            checked={stopOnReply}
-            onChange={(e) => setStopOnReply(e.target.checked)}
-          />
-          Stop when the contact replies
-        </label>
+        <div className="flex items-center gap-1">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              data-testid="seq-stop-on-reply"
+              checked={stopOnReply}
+              onChange={(e) => setStopOnReply(e.target.checked)}
+            />
+            Stop when the contact replies
+          </label>
+          <FieldHelp id="sequence-stop-on-reply" />
+        </div>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-xs font-semibold text-ink">Steps</legend>
+          <legend className="flex items-center gap-1 text-xs font-semibold text-ink">
+            Steps
+            <FieldHelp id="sequence-delay" />
+          </legend>
           {steps.map((step, index) => (
             <div
               key={step.key}

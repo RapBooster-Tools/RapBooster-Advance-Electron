@@ -59,6 +59,7 @@ export default function DevicesPage() {
             onClick={() => setAdding(true)}
             disabled={atLimit}
             data-testid="add-device"
+            data-tour="devices-add"
           >
             + Add Device
           </Button>
@@ -85,6 +86,7 @@ export default function DevicesPage() {
             <div
               key={device.id}
               data-testid="device-card"
+              data-tour="device-card"
               className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4"
             >
               <div className="flex items-start justify-between gap-2">
@@ -119,7 +121,7 @@ export default function DevicesPage() {
                 </p>
               )}
 
-              <div className="mt-1 flex flex-wrap gap-2">
+              <div className="mt-1 flex flex-wrap gap-2" data-tour="device-actions">
                 <Button
                   size="sm"
                   onClick={() => void run(device.id, 'device:reconnect')}

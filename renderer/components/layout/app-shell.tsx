@@ -83,9 +83,9 @@ export function AppShell({
 }: {
   children: ReactNode
   /**
-   * Slot for the future "?" help button at the right of the title bar. Pass a
-   * single focusable element; it is placed in the no-drag region, after the
-   * theme toggle.
+   * The "?" help button at the right of the title bar (the (app) layout passes
+   * HeaderHelpButton). Pass a single focusable element; it is placed in the
+   * no-drag region, after the theme toggle.
    */
   headerHelp?: ReactNode
 }) {

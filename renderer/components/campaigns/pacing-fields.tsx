@@ -1,5 +1,8 @@
 'use client'
 
+import { FieldHelp } from '@renderer/components/help/field-help'
+import type { FieldHelpId } from '@renderer/help'
+
 export interface Pacing {
   delayFrom: number
   delayTo: number
@@ -14,6 +17,7 @@ const FIELDS: ReadonlyArray<{
   min: number
   max: number
   testId: string
+  help: FieldHelpId
 }> = [
   {
     key: 'delayFrom',
@@ -21,6 +25,7 @@ const FIELDS: ReadonlyArray<{
     min: 0,
     max: 300,
     testId: 'cmp-delay-from',
+    help: 'pacing-delay-from',
   },
   {
     key: 'delayTo',
@@ -28,6 +33,7 @@ const FIELDS: ReadonlyArray<{
     min: 0,
     max: 300,
     testId: 'cmp-delay-to',
+    help: 'pacing-delay-from',
   },
   {
     key: 'sleepDuration',
@@ -35,6 +41,7 @@ const FIELDS: ReadonlyArray<{
     min: 0,
     max: 600,
     testId: 'cmp-sleep',
+    help: 'pacing-sleep',
   },
   {
     key: 'sleepAfter',
@@ -42,6 +49,7 @@ const FIELDS: ReadonlyArray<{
     min: 1,
     max: 100,
     testId: 'cmp-sleep-after',
+    help: 'pacing-sleep',
   },
 ]
 
@@ -55,11 +63,14 @@ export function PacingFields({
 }) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      {FIELDS.map(({ key, label, min, max, testId }) => (
+      {FIELDS.map(({ key, label, min, max, testId, help }) => (
         <div key={testId} className="flex flex-col gap-1.5">
-          <label htmlFor={testId} className="text-xs font-semibold text-ink">
-            {label}
-          </label>
+          <span className="flex items-center gap-1">
+            <label htmlFor={testId} className="text-xs font-semibold text-ink">
+              {label}
+            </label>
+            <FieldHelp id={help} />
+          </span>
           <input
             id={testId}
             data-testid={testId}

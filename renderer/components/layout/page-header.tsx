@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { PageHelpButton } from '@renderer/components/help/help-buttons'
 
 /**
  * Screen title row. One per screen, first thing in the content column.
@@ -8,13 +9,14 @@ import type { ReactNode } from 'react'
  * `title` is the screen's name (an <h1>, test id `page-title` — a contract
  * with the E2E suite); `description` says in one plain sentence what the
  * screen is for; `actions` holds the screen's main action — at most one
- * primary Button. `helpSlot` is reserved for a per-screen help control.
+ * primary Button. `helpSlot` defaults to the screen's "?" help button, which
+ * renders nothing outside the licensed app; pass `null` to leave it out.
  */
 export function PageHeader({
   title,
   description,
   actions,
-  helpSlot,
+  helpSlot = <PageHelpButton />,
 }: {
   title: string
   description?: string

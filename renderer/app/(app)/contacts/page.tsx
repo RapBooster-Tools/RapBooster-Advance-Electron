@@ -56,13 +56,18 @@ export default function ContactsPage() {
         description="Import, organise and export your recipients."
         actions={
           <>
-            <Button onClick={() => setManagingTags(true)} data-testid="manage-tags">
+            <Button
+              onClick={() => setManagingTags(true)}
+              data-testid="manage-tags"
+              data-tour="contacts-manage-tags"
+            >
               Manage tags
             </Button>
             <Button
               variant="primary"
               onClick={() => setCreatingList(true)}
               data-testid="new-list"
+              data-tour="contacts-new-list"
             >
               + New List
             </Button>
@@ -70,7 +75,12 @@ export default function ContactsPage() {
         }
       />
 
-      <div className="flex gap-1 px-6 pt-3" role="tablist" aria-label="Contacts view">
+      <div
+        className="flex gap-1 px-6 pt-3"
+        role="tablist"
+        aria-label="Contacts view"
+        data-tour="contacts-views"
+      >
         {VIEWS.map(([value, label]) => (
           <button
             key={value}
@@ -114,7 +124,11 @@ export default function ContactsPage() {
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex gap-1 border-b border-line px-6 pt-3" role="tablist">
+          <div
+            className="flex gap-1 border-b border-line px-6 pt-3"
+            role="tablist"
+            data-tour="contacts-list-tabs"
+          >
             {all.map((list) => (
               <button
                 key={list.id}

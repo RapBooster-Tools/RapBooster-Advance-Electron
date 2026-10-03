@@ -7,6 +7,7 @@ import { AiProviderPanel } from '@renderer/components/chatbot/ai-provider-panel'
 import { AiUsagePanel } from '@renderer/components/chatbot/ai-usage-panel'
 import { Field, INPUT, NumberField, Panel } from '@renderer/components/chatbot/form'
 import type { AiConfig } from '@renderer/components/chatbot/providers'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
@@ -144,6 +145,7 @@ export default function AIBotPage() {
             onClick={() => void save()}
             disabled={busy}
             data-testid="save-chatbot"
+            data-tour="ai-save"
           >
             Save Configuration
           </Button>
@@ -160,7 +162,7 @@ export default function AIBotPage() {
           />
         )}
 
-        <Panel title="System Instructions (Bot Behavior & Motive)">
+        <Panel title="System Instructions (Bot Behavior & Motive)" tour="ai-instructions">
           <textarea
             data-testid="system-instructions"
             value={config.systemInstructions}
@@ -203,7 +205,7 @@ export default function AIBotPage() {
           </div>
         </Panel>
 
-        <Panel title="Auto-Reply Settings">
+        <Panel title="Auto-Reply Settings" tour="ai-auto-reply">
           <label className="flex items-center gap-2 text-sm text-ink">
             <input
               type="checkbox"
@@ -215,7 +217,11 @@ export default function AIBotPage() {
           </label>
 
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Response Delay (sec)" htmlFor="delay-preset">
+            <Field
+              label="Response Delay (sec)"
+              htmlFor="delay-preset"
+              info={<FieldHelp id="ai-response-delay" />}
+            >
               <select
                 id="delay-preset"
                 data-testid="response-delay"
@@ -321,9 +327,13 @@ export default function AIBotPage() {
           </div>
         </Panel>
 
-        <Panel title="Escalation & Handling">
+        <Panel title="Escalation & Handling" tour="ai-escalation">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Escalation Trigger" htmlFor="trigger">
+            <Field
+              label="Escalation Trigger"
+              htmlFor="trigger"
+              info={<FieldHelp id="ai-escalation" />}
+            >
               <select
                 id="trigger"
                 data-testid="escalation-trigger"

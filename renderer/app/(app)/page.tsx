@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { AnalyticsChart } from '@renderer/components/dashboard/analytics-chart'
 import { AttentionCards } from '@renderer/components/dashboard/attention-cards'
 import { DeviceUsage } from '@renderer/components/dashboard/device-usage'
+import { GettingStarted } from '@renderer/components/dashboard/getting-started'
 import { SafetyBanner } from '@renderer/components/dashboard/safety-banner'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { useIpcEvent, useIpcQuery } from '@renderer/hooks/useIpc'
@@ -72,6 +73,7 @@ export default function DashboardPage() {
       <PageHeader title="Dashboard" />
       <div className="flex-1 p-6">
         <SafetyBanner />
+        <GettingStarted />
         {stats.error ? (
           <p className="text-sm text-danger" role="alert">
             {stats.error.userMessage}
@@ -81,12 +83,13 @@ export default function DashboardPage() {
             <dl
               className="grid grid-cols-2 gap-4 xl:grid-cols-4"
               data-testid="dashboard-stats"
+              data-tour="dashboard-stats"
             >
               {cards.map((card) => (
                 <StatCard key={card.label} {...card} loading={loading} />
               ))}
             </dl>
-            <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="mt-4 grid grid-cols-2 gap-4" data-tour="dashboard-today">
               <StatCard
                 label="Sent today"
                 value={stats.data?.sentToday ?? 0}
@@ -100,7 +103,7 @@ export default function DashboardPage() {
             </div>
             {insight && (
               <>
-                <div className="mt-4">
+                <div className="mt-4" data-tour="dashboard-attention">
                   <AttentionCards
                     escalated={insight.escalated}
                     drafts={insight.repliesAwaiting}

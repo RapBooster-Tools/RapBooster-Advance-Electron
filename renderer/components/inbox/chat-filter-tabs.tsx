@@ -19,7 +19,12 @@ export function ChatFilterTabs({
   onChange: (value: ChatFilter) => void
 }) {
   return (
-    <div role="tablist" aria-label="Filter chats" className="flex gap-1">
+    <div
+      role="tablist"
+      aria-label="Filter chats"
+      className="flex gap-1"
+      data-tour="inbox-filters"
+    >
       {TABS.map(([tab, label]) => (
         <button
           key={tab}

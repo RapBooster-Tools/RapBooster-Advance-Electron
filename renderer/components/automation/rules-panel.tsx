@@ -27,7 +27,10 @@ function RuleTester({ rules }: { rules: KeywordRule[] }) {
 
   const matched = rules.find((r) => r.id === result?.ruleId)
   return (
-    <section className="rounded-card border border-line bg-surface p-4">
+    <section
+      className="rounded-card border border-line bg-surface p-4"
+      data-tour="automation-rule-test"
+    >
       <h2 className="mb-2 text-sm font-semibold text-ink">Test a message</h2>
       <div className="flex gap-2">
         <input
@@ -87,7 +90,12 @@ export function RulesPanel() {
           Rules answer one-to-one chats before the AI bot. The highest priority match
           wins.
         </p>
-        <Button variant="primary" onClick={() => setEditing(null)} data-testid="rule-new">
+        <Button
+          variant="primary"
+          onClick={() => setEditing(null)}
+          data-testid="rule-new"
+          data-tour="automation-rule-new"
+        >
           + New rule
         </Button>
       </div>

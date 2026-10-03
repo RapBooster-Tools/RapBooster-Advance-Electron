@@ -12,6 +12,7 @@ export function DeviceUsage({ devices }: { devices: DeviceUsageRow[] }) {
     <section
       className="rounded-card border border-line bg-surface p-4"
       data-testid="device-usage-panel"
+      data-tour="dashboard-usage"
     >
       <h2 className="mb-2 text-sm font-semibold text-ink">Device usage today</h2>
       {devices.length === 0 ? (

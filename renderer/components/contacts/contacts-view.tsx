@@ -150,10 +150,16 @@ export function ContactsView({
           size="sm"
           onClick={() => setDialog('import')}
           data-testid="import-contacts"
+          data-tour="contacts-import"
         >
           Import
         </Button>
-        <Button size="sm" onClick={onImportFromWhatsApp} data-testid="import-whatsapp">
+        <Button
+          size="sm"
+          onClick={onImportFromWhatsApp}
+          data-testid="import-whatsapp"
+          data-tour="contacts-import-whatsapp"
+        >
           Import from WhatsApp
         </Button>
         <Button size="sm" onClick={() => void exportList()} data-testid="export-contacts">
@@ -169,6 +175,7 @@ export function ContactsView({
           }}
           disabled={current !== undefined && !current.done}
           data-testid="verify-numbers"
+          data-tour="contacts-verify"
         >
           Verify numbers
         </Button>

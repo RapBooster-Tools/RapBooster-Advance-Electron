@@ -4,6 +4,7 @@ import { ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useToast } from '@renderer/components/providers/toast-provider'
 import { Button } from '@renderer/components/ui/button'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { StatusPill } from '@renderer/components/ui/status-pill'
 import type { IpcResponse } from '@shared/ipc'
 import { UsageBar } from './usage-bar'
@@ -107,30 +108,35 @@ export function DeviceSafety({
         </div>
       )}
 
-      <UsageBar
-        sent={device.dailySentCount}
-        cap={device.effectiveCap}
-        paused={paused}
-        testId="device-usage"
-      />
-
-      <label className="flex items-center justify-between gap-2 text-xs">
-        <span className="flex flex-col">
-          <span className="font-semibold text-ink">Warmup</span>
-          <span className="text-ink-muted" data-testid="warmup-caption">
-            {warmupCaption(device)}
-          </span>
-        </span>
-        <input
-          type="checkbox"
-          role="switch"
-          className="size-4 accent-primary"
-          checked={pendingWarmup ?? device.warmupEnabled}
-          disabled={busy}
-          onChange={(e) => void setWarmup(e.target.checked)}
-          data-testid="warmup-toggle"
+      <div data-tour="device-usage">
+        <UsageBar
+          sent={device.dailySentCount}
+          cap={device.effectiveCap}
+          paused={paused}
+          testId="device-usage"
         />
-      </label>
+      </div>
+
+      <div className="flex items-center gap-2" data-tour="device-warmup">
+        <label className="flex flex-1 items-center justify-between gap-2 text-xs">
+          <span className="flex flex-col">
+            <span className="font-semibold text-ink">Warmup</span>
+            <span className="text-ink-muted" data-testid="warmup-caption">
+              {warmupCaption(device)}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="size-4 accent-primary"
+            checked={pendingWarmup ?? device.warmupEnabled}
+            disabled={busy}
+            onChange={(e) => void setWarmup(e.target.checked)}
+            data-testid="warmup-toggle"
+          />
+        </label>
+        <FieldHelp id="warmup" side="left" />
+      </div>
 
       <div className="flex items-center justify-between gap-2 text-xs">
         {device.isBusiness ? (

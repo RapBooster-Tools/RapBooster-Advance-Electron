@@ -3,6 +3,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
 import type { FlowTrigger } from '@shared/flow'
+import { FieldHelp } from '@renderer/components/help/field-help'
 import { useIpcQuery } from '@renderer/hooks/useIpc'
 import { Field, INPUT_CLASS } from '../field'
 import type { FlowDraft } from './flow-templates'
@@ -54,7 +55,11 @@ export function FlowSettings({
         />
       </Field>
 
-      <Field label="Start this flow" htmlFor="flow-trigger">
+      <Field
+        label="Start this flow"
+        htmlFor="flow-trigger"
+        info={<FieldHelp id="flow-trigger" />}
+      >
         <select
           id="flow-trigger"
           data-testid="flow-trigger"
@@ -112,6 +117,7 @@ export function FlowSettings({
       <Field
         label="Priority"
         htmlFor="flow-priority"
+        info={<FieldHelp id="flow-priority" />}
         hint="When two flows could start, the higher number wins."
       >
         <input
