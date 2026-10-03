@@ -32,6 +32,9 @@ export function BulkCreateGroupsDialog({
   const [delaySeconds, setDelaySeconds] = useState(2)
   const [listIds, setListIds] = useState<string[]>([])
   const [contactsPerGroup, setContactsPerGroup] = useState(10)
+  const [description, setDescription] = useState('')
+  const [announce, setAnnounce] = useState(false)
+  const [joinApproval, setJoinApproval] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -61,6 +64,9 @@ export function BulkCreateGroupsDialog({
       delaySeconds,
       listIds,
       contactsPerGroup,
+      ...(description.trim() ? { description: description.trim() } : {}),
+      announce,
+      joinApproval,
     })
     setBusy(false)
 
@@ -231,6 +237,39 @@ export function BulkCreateGroupsDialog({
             WhatsApp privacy settings can stop a contact being added. Groups with fewer
             members than requested are normal, and the result log records which.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="bulk-description" className="text-xs font-semibold text-ink">
+            Group Description (optional)
+          </label>
+          <textarea
+            id="bulk-description"
+            data-testid="bulk-description"
+            rows={2}
+            maxLength={2048}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="rounded-control border border-line px-2.5 py-2 text-sm outline-none focus:border-primary"
+          />
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              data-testid="bulk-announce"
+              checked={announce}
+              onChange={(e) => setAnnounce(e.target.checked)}
+            />
+            Only admins can send messages
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              data-testid="bulk-join-approval"
+              checked={joinApproval}
+              onChange={(e) => setJoinApproval(e.target.checked)}
+            />
+            Approve new members before they join
+          </label>
         </div>
 
         <div className="rounded-card bg-app-bg px-3 py-2">
