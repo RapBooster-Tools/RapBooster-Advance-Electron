@@ -5,7 +5,9 @@
  * `services/license/http.ts` — the code that will run in production the day
  * REQUIREMENTS §1 is answered — had never been executed by anything. These
  * specs launch the app with `LICENSE_SERVICE` unset so the real client is
- * selected, and point `LICENSE_API_URL` at a stub we control.
+ * selected, and point `LICENSE_API_URL` at a stub we control that speaks the
+ * rap.clatos.com contract (D160): GET with query parameters, answering
+ * `{ isValid: 1 | 0, message }`.
  *
  * The behaviour under test is the one with the worst failure mode: what
  * happens to a paying customer when the license server misbehaves. A response
@@ -29,14 +31,14 @@ interface StubReply {
 let server: Server
 let baseUrl: string
 let reply: StubReply
-let requests: { path: string; body: string }[] = []
+let requests: { method: string; path: string; body: string }[] = []
 
 test.beforeAll(async () => {
   server = createServer((req, res) => {
     let raw = ''
     req.on('data', (c) => (raw += c))
     req.on('end', () => {
-      requests.push({ path: req.url ?? '', body: raw })
+      requests.push({ method: req.method ?? '', path: req.url ?? '', body: raw })
       res.writeHead(reply.status, {
         'Content-Type': reply.contentType ?? 'application/json',
       })
@@ -57,7 +59,11 @@ test.beforeEach(() => {
 })
 
 async function launchAgainstStub(userDataDir: string): Promise<ElectronApplication> {
-  const env = { ...process.env, LICENSE_API_URL: baseUrl, WA_TRANSPORT: 'mock' }
+  const env = {
+    ...process.env,
+    LICENSE_API_URL: `${baseUrl}/api/licenseactivation`,
+    WA_TRANSPORT: 'mock',
+  }
   // LICENSE_SERVICE must be absent, not empty — that is what selects
   // HttpLicenseService over the mock every other spec uses.
   delete env.LICENSE_SERVICE
@@ -80,7 +86,7 @@ test('E1.17 — the real client is used and sends the key and fingerprint', asyn
   const dir = newUserDataDir()
   reply = {
     status: 200,
-    body: JSON.stringify({ status: 'invalid', message: 'Unknown key' }),
+    body: JSON.stringify({ isValid: 0, message: 'Invalid License Key' }),
   }
   const app = await launchAgainstStub(dir)
   try {
@@ -90,20 +96,20 @@ test('E1.17 — the real client is used and sends the key and fingerprint', asyn
     // An explicit rejection must still be honoured immediately.
     await expect(win.getByTestId('license-error')).toBeVisible()
 
-    // Pins the wire contract we are currently assuming (REQUIREMENTS §1.3),
-    // so that when the real API is specified the difference shows up here as a
-    // failing test rather than as a silent mismatch against a live server.
-    expect(requests.length).toBeGreaterThan(0)
-    expect(requests[0].path).toBe('/activate')
+    // The server's message is shown as is.
+    await expect(win.getByTestId('license-error')).toContainText('Invalid License Key')
 
-    const sent = JSON.parse(requests[0].body) as Record<string, unknown>
-    expect(sent.key).toBe('SOME-KEY-0001')
-    // The machine fingerprint travels as `device_id`, and is what binds an
-    // activation to this computer.
-    expect(typeof sent.device_id).toBe('string')
-    expect((sent.device_id as string).length).toBeGreaterThan(0)
-    expect(typeof sent.device_name).toBe('string')
-    expect(typeof sent.app_version).toBe('string')
+    // Pins the rap.clatos.com wire contract (D160): the route only accepts GET.
+    expect(requests.length).toBeGreaterThan(0)
+    expect(requests[0].method).toBe('GET')
+    const url = new URL(requests[0].path, baseUrl)
+    expect(url.pathname).toBe('/api/licenseactivation')
+    expect(url.searchParams.get('softwareId')).toBe('26')
+    expect(url.searchParams.get('key')).toBe('SOME-KEY-0001')
+    // The machine fingerprint travels as `hardwareId`, and is what the server
+    // binds an activation to.
+    expect(url.searchParams.get('hardwareId')).toMatch(/^[a-f0-9]{64}$/)
+    expect(url.searchParams.get('softwareVersion')).toBeTruthy()
   } finally {
     await app.close()
     cleanupUserDataDir(dir)
@@ -143,7 +149,7 @@ test('E1.19 — rate limiting does not deactivate an activated machine', async (
   const dir = newUserDataDir()
   reply = {
     status: 200,
-    body: JSON.stringify({ status: 'valid', expires_at: null, device_name: 'Stub PC' }),
+    body: JSON.stringify({ isValid: 1, message: 'Activated', nameOnSoftware: 'Stub PC' }),
   }
   const app = await launchAgainstStub(dir)
   try {
@@ -177,7 +183,7 @@ test('E1.20 — a server error keeps the user working under grace', async () => 
   const dir = newUserDataDir()
   reply = {
     status: 200,
-    body: JSON.stringify({ status: 'valid', expires_at: null, device_name: 'Stub PC' }),
+    body: JSON.stringify({ isValid: 1, message: 'Activated', nameOnSoftware: 'Stub PC' }),
   }
   const app = await launchAgainstStub(dir)
   try {
@@ -201,7 +207,7 @@ test('E1.21 — an explicit revocation is honoured immediately, not given grace'
   const dir = newUserDataDir()
   reply = {
     status: 200,
-    body: JSON.stringify({ status: 'valid', expires_at: null, device_name: 'Stub PC' }),
+    body: JSON.stringify({ isValid: 1, message: 'Activated', nameOnSoftware: 'Stub PC' }),
   }
   const app = await launchAgainstStub(dir)
   try {
@@ -215,7 +221,7 @@ test('E1.21 — an explicit revocation is honoured immediately, not given grace'
     // server can never revoke. When it says so explicitly, that is final.
     reply = {
       status: 200,
-      body: JSON.stringify({ status: 'revoked', message: 'Licence revoked' }),
+      body: JSON.stringify({ isValid: 0, message: 'Licence revoked' }),
     }
     // Fire and forget: honouring the revocation swaps this window back to the
     // activation screen, which can land before the invoke's reply and destroy

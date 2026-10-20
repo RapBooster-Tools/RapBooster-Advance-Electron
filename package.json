@@ -37,6 +37,7 @@
     "check:source": "node scripts/check-source.mjs",
     "check:guide": "node scripts/build-user-guide.mjs --check",
     "docs:guide": "node scripts/build-user-guide.mjs",
+    "brand": "node scripts/make-brand.mjs",
     "check:migrations": "node scripts/check-migrations.mjs"
   },
   "dependencies": {

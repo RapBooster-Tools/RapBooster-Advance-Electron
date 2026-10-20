@@ -1,6 +1,6 @@
 'use client'
 
-import { MessageCircle, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import Link from 'next/link'
 import { useSelectedLayoutSegment } from 'next/navigation'
 import type { ReactNode } from 'react'
@@ -9,6 +9,7 @@ import { Tooltip } from '@renderer/components/ui/tooltip'
 import { cn } from '../../lib/cn'
 import { NAV_GROUPS, type NavItem } from './nav'
 import { ThemeToggle } from './theme-toggle'
+import brandMark from './brand-mark.png'
 
 function NavLink({
   item,
@@ -56,16 +57,20 @@ function NavLink({
   )
 }
 
-/** The product mark: a gradient tile, used in the title bar. */
+/**
+ * The product mark, used in the title bar: the RapBooster "rb" logo every
+ * RapBooster app shares, in Advance's green (D161, `npm run brand`).
+ */
 function BrandMark() {
   return (
-    <span
+    <img
+      src={brandMark.src}
+      alt=""
       aria-hidden
-      className="flex size-8 items-center justify-center rounded-[10px] shadow-raised"
-      style={{ backgroundImage: 'var(--gradient-accent)' }}
-    >
-      <MessageCircle className="size-[18px] text-white" strokeWidth={2.2} />
-    </span>
+      width={32}
+      height={32}
+      className="size-8 shrink-0 rounded-[8px] shadow-raised"
+    />
   )
 }
 

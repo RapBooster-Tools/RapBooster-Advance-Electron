@@ -45,7 +45,8 @@ export class MockLicenseService implements LicenseService {
     if (upper.startsWith('OFFLINE-')) {
       return { kind: 'unreachable', detail: 'mock: simulated network failure' }
     }
-    return { kind: 'invalid', reason: 'Unknown key' }
+    // The real server's wording for an unknown key (D160).
+    return { kind: 'invalid', reason: 'Invalid License Key' }
   }
 
   async activate(request: ActivationRequest): Promise<LicenseOutcome> {

@@ -16,12 +16,12 @@ How to produce, sign and publish a RapBooster Advance build for **Windows and ma
 
 ## What is missing, and what happens without it
 
-| Needed                            | REQUIREMENTS | Consequence if absent                                                                                                         |
-| --------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| App icon, publisher name          | §2           | A placeholder icon ships (`assets/branding/icon.png`), and the installer shows no verified publisher                          |
-| Update feed URL                   | §3           | `system:checkUpdate` reports "no update server is configured" rather than falsely claiming the app is current                 |
-| Windows code-signing certificate  | §4           | Unsigned `.exe`; Windows SmartScreen warns users the app is unrecognised                                                      |
-| Apple Developer ID + notarization | §4           | Unsigned `.app`; Gatekeeper refuses to open it ("damaged" / "unidentified developer"), and Mac auto-update cannot work at all |
+| Needed                            | REQUIREMENTS | Consequence if absent                                                                                         |
+| --------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------- |
+| App icon, publisher name          | §2           | A placeholder icon ships (`assets/branding/icon.png`), and the installer shows no verified publisher          |
+| Update feed URL                   | §3           | `system:checkUpdate` reports "no update server is configured" rather than falsely claiming the app is current |
+| Windows code-signing certificate  | §4           | Unsigned `.exe`; Windows SmartScreen warns users the app is unrecognised                                      |
+| Apple Developer ID + notarization | §4           | Ad-hoc signed `.app` (D159); users approve it once with "Open Anyway", and Mac auto-update cannot work at all |
 
 None of these block development. All of them block shipping to real users.
 
@@ -38,14 +38,20 @@ npm run dist:mac     # dmg + zip, arm64 and x64 — run on a Mac
 ```
 
 **Mac builds must run on macOS.** `better-sqlite3` and sharp's `@img/sharp-darwin-*`
-packages are native, and each architecture needs its own darwin binary. On an
-Apple Silicon Mac, install both before building so the x64 build has one too:
+packages are native, and each architecture needs its own darwin binary. npm
+installs only the one for the build Mac's CPU, and
+`npm install --cpu=x64 sharp` _replaces_ it rather than adding to it (sharp then
+fails to load and `check:deps` stops the build). Install both side by side, at
+the versions sharp's `optionalDependencies` list:
 
 ```bash
 npm ci
-npm install --no-save --os=darwin --cpu=x64 sharp
+npm install --no-save --force @img/sharp-darwin-arm64@<v> @img/sharp-libvips-darwin-arm64@<v> \
+  @img/sharp-darwin-x64@<v> @img/sharp-libvips-darwin-x64@<v>
 npm run dist:mac
 ```
+
+`build-mac-all.sh advance` in the parent folder does this for you, with the versions filled in.
 
 The packaged self-test is the check that the native modules really loaded:
 `"dist/mac-arm64/RapBooster Advance.app/Contents/MacOS/RapBooster Advance" --self-test`
@@ -74,9 +80,25 @@ gets rewritten against what you actually have.
 
 ### macOS
 
-Needs an Apple Developer Program membership. Signing uses a "Developer ID
-Application" certificate; notarization runs automatically when the Apple
-credentials are present and is skipped otherwise.
+**Without an Apple Developer ID (today, D159)** `npm run dist:mac` ad-hoc signs
+the app (`identity: '-'` in `electron-builder.yml`). It runs on any Mac on macOS
+13 or later, but Gatekeeper does not know the developer, so the first launch
+needs the user's approval:
+
+1. Open the dmg and drag RapBooster Advance to Applications.
+2. Open the app. macOS says it cannot verify it; click **Done**.
+3. System Settings → Privacy & Security → scroll down → **Open Anyway**, then
+   confirm with the Mac password.
+
+On macOS 14 and older, right-click the app → **Open** → **Open** also works. If
+macOS ever says the app "is damaged", the signature is broken: run
+`codesign --verify --deep --strict "<app>"` on the build machine to find out why
+(`xattr -dr com.apple.quarantine "/Applications/RapBooster Advance.app"` gets a
+single user past it, but fix the build).
+
+**With an Apple Developer ID**, signing uses a "Developer ID Application"
+certificate. In `electron-builder.yml` remove `identity: '-'` and set
+`hardenedRuntime: true` and `notarize: true`, then:
 
 ```bash
 export CSC_LINK=/path/to/developer-id-application.p12

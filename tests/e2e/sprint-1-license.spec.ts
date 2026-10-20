@@ -51,7 +51,7 @@ test('E1.3 — an invalid key is rejected and nothing is stored', async () => {
     const win = await app.firstWindow()
     await activateWith(win, 'NOT-A-REAL-KEY')
 
-    await expect(win.getByTestId('license-error')).toContainText('Invalid license key')
+    await expect(win.getByTestId('license-error')).toContainText(/invalid license key/i)
     await expect(win.getByTestId('nav-dashboard')).toHaveCount(0)
 
     const db = new DatabaseSync(join(dir, 'rapbooster.db'), { readOnly: true })

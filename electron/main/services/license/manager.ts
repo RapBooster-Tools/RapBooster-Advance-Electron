@@ -6,12 +6,13 @@
  * IPC guard both read `currentStatus()` from here — there is one source of
  * truth for whether the app is licensed.
  */
+import { app } from 'electron'
 import { createHmac } from 'node:crypto'
 import type { LicenseStatus } from '../../../../shared/types'
 import { getPrisma } from '../../db/client'
 import { appVersion, deviceFingerprint, deviceName } from '../fingerprint'
 import { decryptValue, encryptValue, maskKey } from '../secure-store'
-import { HttpLicenseService } from './http'
+import { DEFAULT_LICENSE_ENDPOINT, HttpLicenseService } from './http'
 import { MockLicenseService } from './mock'
 import type { LicenseOutcome, LicenseService } from './types'
 
@@ -51,16 +52,18 @@ let cached: LicenseInfo = UNLICENSED
 
 /**
  * Selected by env so E2E can drive every branch deterministically without a
- * network. Production uses the HTTP client once REQUIREMENTS §1 is filled.
+ * network. WHY only unpackaged: a shipped build that honoured
+ * `LICENSE_SERVICE=mock` would unlock for anyone who sets one variable, and
+ * `LICENSE_API_URL` would let a local stub answer "valid" (D160).
  */
 export function getLicenseService(): LicenseService {
   if (!service) {
-    if (process.env.LICENSE_SERVICE === 'mock') {
+    const devRun = !app.isPackaged
+    if (devRun && process.env.LICENSE_SERVICE === 'mock') {
       service = new MockLicenseService()
     } else {
       service = new HttpLicenseService({
-        baseUrl: process.env.LICENSE_API_URL ?? 'https://license.invalid/api',
-        ...(process.env.LICENSE_API_KEY ? { apiKey: process.env.LICENSE_API_KEY } : {}),
+        endpoint: (devRun && process.env.LICENSE_API_URL) || DEFAULT_LICENSE_ENDPOINT,
       })
     }
   }
@@ -228,6 +231,8 @@ export interface ActivationResult {
   status: LicenseStatus
   info: LicenseInfo | null
   conflict: ConflictInfo | null
+  /** The server's reason for a rejection, e.g. the key is bound to another computer. */
+  message: string | null
 }
 
 async function apply(
@@ -242,6 +247,7 @@ async function apply(
       status: 'conflict',
       info: null,
       conflict: { deviceName: outcome.deviceName, lastUsedAt: outcome.lastUsedAt },
+      message: null,
     }
   }
 
@@ -254,11 +260,13 @@ async function apply(
       serverDeviceName: outcome.deviceName ?? deviceName(),
       graceUntil: null,
     })
-    return { status: 'valid', info, conflict: null }
+    return { status: 'valid', info, conflict: null, message: null }
   }
 
   // Rejections are not stored either — nothing about the machine changed.
-  return { status: statusFor(outcome), info: null, conflict: null }
+  const message =
+    outcome.kind === 'invalid' || outcome.kind === 'revoked' ? outcome.reason : null
+  return { status: statusFor(outcome), info: null, conflict: null, message }
 }
 
 export async function activate(key: string, remarks?: string): Promise<ActivationResult> {

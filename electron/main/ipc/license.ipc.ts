@@ -19,7 +19,12 @@ export function registerLicenseHandlers(onChange: () => void): void {
   registerHandler('license:activate', async ({ key, remarks }) => {
     const result = await activate(key, remarks)
     if (result.status === 'valid') onChange()
-    return { status: result.status, info: result.info, conflict: result.conflict }
+    return {
+      status: result.status,
+      info: result.info,
+      conflict: result.conflict,
+      message: result.message,
+    }
   })
 
   registerHandler('license:transfer', async ({ key, remarks }) => {

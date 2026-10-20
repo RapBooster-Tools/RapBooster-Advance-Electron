@@ -56,15 +56,25 @@ mac:
       arch: [arm64, x64]
   icon: assets/branding/icon.png
   category: public.app-category.business
-  # Required for notarization. Without an Apple Developer identity
-  # (REQUIREMENTS §4) the build is unsigned and Gatekeeper blocks it.
-  hardenedRuntime: true
+  # No Apple Developer ID (REQUIREMENTS §4), so the app is ad-hoc signed ('-'):
+  # every binary gets a valid signature after packaging. Without one, Apple
+  # Silicon Macs report a downloaded build as "damaged" with no way to open it;
+  # with it, users get the normal "Open Anyway" prompt in System Settings →
+  # Privacy & Security. Hardened runtime is off because it is only useful for
+  # notarization, and with an ad-hoc signature its library validation would
+  # refuse the native modules (better-sqlite3, sharp).
+  # When a Developer ID exists: set identity to it (or remove the line),
+  # hardenedRuntime: true, notarize: true, and add the APPLE_* env vars.
+  identity: '-'
+  hardenedRuntime: false
   gatekeeperAssess: false
+  notarize: false
   entitlements: assets/branding/entitlements.mac.plist
   entitlementsInherit: assets/branding/entitlements.mac.plist
-  # Notarization is automatic when APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
-  # APPLE_TEAM_ID (or an App Store Connect API key) are set in the environment,
-  # and skipped otherwise.
+
+# The arch is in every name: without it the Intel dmg was just "RapBooster Advance-0.1.0.dmg".
+dmg:
+  artifactName: RapBooster-Advance-${version}-${arch}.${ext}
 
 linux:
   target: []

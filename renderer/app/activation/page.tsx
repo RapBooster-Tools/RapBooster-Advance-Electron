@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import type { SerializedError } from '@shared/errors'
 import type { LicenseStatus } from '@shared/types'
 import { Button } from '@renderer/components/ui/button'
+import brandMark from '@renderer/components/layout/brand-mark.png'
 
 interface Conflict {
   deviceName: string
@@ -81,8 +82,11 @@ export default function ActivationPage() {
       return
     }
 
+    // The server's own reason (e.g. the key is in use on another computer)
+    // beats generic copy; `grace` never carries one.
     setError(
-      REJECTION_COPY[result.data.status] ??
+      result.data.message ??
+        REJECTION_COPY[result.data.status] ??
         'Invalid license key. Please check and try again.',
     )
   }
@@ -112,8 +116,16 @@ export default function ActivationPage() {
   return (
     <div className="flex h-full items-center justify-center bg-app-bg p-6">
       <div className="w-full max-w-[500px] rounded-card border border-line bg-surface shadow-sm">
-        <div className="border-b border-line px-5 py-3 text-[13px] font-semibold text-ink">
-          Activate License
+        <div className="flex items-center gap-2.5 border-b border-line px-5 py-3 text-[13px] font-semibold text-ink">
+          <img
+            src={brandMark.src}
+            alt=""
+            aria-hidden
+            width={24}
+            height={24}
+            className="size-6 shrink-0 rounded-[6px]"
+          />
+          Activate RapBooster Advance
         </div>
 
         <form className="flex flex-col gap-4 p-5" onSubmit={submit}>

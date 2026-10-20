@@ -24,10 +24,10 @@ Rules: [CLAUDE.md](../CLAUDE.md) · Spec: [SPRINTS.md](../SPRINTS.md)
 | [Architecture](#architecture)                                                 | D2–D4, D13–D16, D18, D31–D34, D39, D40, D42, D89, D93, D94, D130, D144, D146                                      |
 | [WhatsApp and anti-ban](#whatsapp-and-anti-ban)                               | D6, D7, D45, D49, D61, D63, D68, D70, D71, D76, D77, D95, D97, D99, D100, D107, D109–D111, D116, D129, D134, D147 |
 | [Data](#data)                                                                 | D5, D8, D35–D37, D41, D43, D50, D73, D74, D90, D112, D113, D115, D136, D137, D139, D140, D148                     |
-| [Security and licensing](#security-and-licensing)                             | D17, D23–D25, D29, D52, D64, D65, D88, D104, D105                                                                 |
+| [Security and licensing](#security-and-licensing)                             | D17, D23–D25, D29, D52, D64, D65, D88, D104, D105, D160                                                           |
 | [AI and automation](#ai-and-automation)                                       | D53, D54, D78, D101–D103, D108, D114, D131–D133                                                                   |
 | [UX](#ux)                                                                     | D20–D22, D28, D44, D48, D67, D75, D96, D106, D135, D141–D143, D145, D153–D157                                     |
-| [Packaging and release](#packaging-and-release)                               | D12, D55, D58, D62, D150                                                                                          |
+| [Packaging and release](#packaging-and-release)                               | D12, D55, D58, D62, D150, D159, D161                                                                              |
 | [Dependencies](#dependencies)                                                 | D9–D11, D56, D57, D59, D60, D69, D82, D86, D91, D138                                                              |
 | [Process and testing](#process-and-testing)                                   | D19, D26, D27, D30, D38, D46, D47, D51, D72, D83, D84, D87, D92, D98, D149                                        |
 
@@ -52,7 +52,7 @@ Decisions the customer made. Code follows them; they change only on a new custom
   be recovered. _Then:_ values fixed by D126.
 - **D81** · 2026-10-02 · Accepted — CI and a unit-test layer deferred. _Why:_ customer
   decision. _Then:_ the Playwright suite, run locally, stays the gate.
-- **D85** · 2026-10-02 · Accepted — macOS reinstated: dmg + zip, arm64 + x64, hardened runtime,
+- **D85** · 2026-10-02 · Amended by D159 — macOS reinstated: dmg + zip, arm64 + x64, hardened runtime,
   auto-notarization when Apple credentials exist. _Why:_ customer instruction. _Then:_
   `dist:mac`, Mac paths in smoke/perf, and the macOS window lifecycle (closing the window keeps
   campaigns running). zip is required because electron-updater installs Mac updates from it.
@@ -424,6 +424,17 @@ Decisions the customer made. Code follows them; they change only on a new custom
   imported one. _Why:_ an opt-out is a legal and ban-risk matter; a contact must not be able to
   undo an opt-out the business recorded.
 
+- **D160** · 2026-10-20 · Accepted — License server: the RapBooster server every RapBooster app
+  uses, `GET https://rap.clatos.com/api/licenseactivation` with `softwareId=26` (owner). The
+  machine fingerprint is sent as `hardwareId`; the first valid call binds the key to it. Only
+  `isValid: 0` is a rejection (on activation `invalid`, on revalidation `revoked`), shown with
+  the server's own message; anything unparseable stays `unreachable` and the existing grace.
+  There is no transfer or release endpoint: the vendor resets a binding on the server, and
+  deactivate clears only the local record. `LICENSE_SERVICE=mock` and `LICENSE_API_URL` are
+  honoured only in unpackaged runs. _Why:_ answers REQUIREMENTS §1; a packaged build that read
+  them could be unlocked by setting one variable. _Then:_ `services/license/http.ts`; E1.17–E1.21
+  pin the wire contract.
+
 ## AI and automation
 
 - **D53** · 2026-07-28 · Accepted — Auto-reply failures produce distinct codes
@@ -595,6 +606,19 @@ Decisions the customer made. Code follows them; they change only on a new custom
   `out/main/chunks`, wa-service was looked up at `chunks/wa-service/index.js` and crashed, and
   every `device:connect` failed. _Then:_ CLAUDE.md §9 — no module imported by two entries
   resolves a sibling file from `__dirname`.
+- **D159** · 2026-10-20 · Accepted — Until an Apple Developer ID exists, the Mac build is
+  ad-hoc signed (`identity: '-'`), with hardened runtime and notarization off. _Why:_ with no
+  identity electron-builder skipped signing, so a downloaded build was reported "damaged" on
+  Apple Silicon and could not be opened; an ad-hoc signature gives users the "Open Anyway"
+  prompt instead, and hardened-runtime library validation would refuse the native modules
+  under an ad-hoc signature. _Then:_ amends D85; Mac auto-update cannot install (Squirrel.Mac
+  needs a real signature), so Mac users update by downloading the new dmg. RELEASE.md §macOS
+  says how to switch back once the identity exists.
+- **D161** · 2026-10-20 · Accepted — Brand: the RapBooster "rb" logo every RapBooster app shares,
+  recoloured from its orange original to Advance's green `#007561` (`--color-primary`) in OKLCH,
+  as LinkDesk does in blue. `npm run brand` (`scripts/make-brand.mjs`) writes the app icon, the
+  tray images and the title-bar mark from `assets/branding/source/*.orig.png`. _Why:_ owner
+  instruction; the placeholder chat-bubble icon was not the product's logo.
 
 ## Dependencies
 

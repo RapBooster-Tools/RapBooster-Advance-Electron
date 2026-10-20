@@ -30,7 +30,11 @@ Everything in §6 already has a working default. Read it only if you want to cha
 
 ---
 
-## Section 1 — License Server API ⬜
+## Section 1 — License Server API ✅
+
+> **Answered 2026-10-20 — see D160.** `GET https://rap.clatos.com/api/licenseactivation`,
+> `softwareId=26`, the same server and route as every RapBooster app. The tables below are kept
+> as the original questions.
 
 The prototype's activation screen validates keys client-side against a hardcoded list. The
 real app must call your server. Everything below is needed to write that client.

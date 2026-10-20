@@ -288,6 +288,8 @@ export const ipcContract = {
       status: licenseStatus,
       info: licenseInfo.nullable(),
       conflict: licenseConflict.nullable(),
+      /** The license server's own words for a rejection (D160), shown as is. */
+      message: z.string().nullable(),
     }),
   },
   'license:transfer': {
